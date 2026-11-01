@@ -1,77 +1,82 @@
-# README — Hướng dẫn tự kiểm tra hệ thống DREAM (Robot tự phục hồi khi mất camera)
+# README — Self-check guide for the DREAM system (robot that recovers when the camera is lost)
 
-Tài liệu này dành cho người **không rành lập trình**. Bạn chỉ cần **sao chép – dán** các
-lệnh dưới đây vào cửa sổ Terminal và so sánh kết quả hiện ra với phần
-**“Kết quả mong đợi”**. Không cần sửa code.
-
----
-
-## 0. Đây là dự án gì?
-
-Hệ thống mô phỏng một con robot chạy bằng vSLAM. Khi **mất tín hiệu camera**, robot
-phải **tự quay về điểm xuất phát** mà không nhìn thấy gì, chỉ dựa vào các **“mốc đường”**
-(landmark) đã ghi trước đó.
-
-DREAM là thuật toán **ghi mốc thông minh**: chỉ ghi mốc ở những chỗ cần thiết (khúc cua,
-chỗ đổi tốc độ) và **bỏ qua** những đoạn thẳng đều, nhờ đó **giảm số mốc phải lưu**
-mà vẫn quay về chính xác.
-
-Mục tiêu của bản README này: giúp bạn **chạy lại các phép thử** và **tự kiểm tra** xem
-những con số trong bản thảo (bài báo) có đúng với kết quả thực tế hay không.
+This guide is written for people who are **not programmers**. You only need to
+**copy-paste** the commands below into a Terminal window and compare what you see
+with the **“Expected result”** sections. You do not need to modify any code.
 
 ---
 
-## 1. Chuẩn bị một lần duy nhất
+## 0. What is this project?
 
-### 1.1 Yêu cầu đã cài sẵn (kiểm tra nhanh)
+The system simulates a robot that navigates with vSLAM. When the **camera signal is
+lost**, the robot must **drive itself back to the starting point** without seeing
+anything, relying only on **“landmarks”** recorded earlier along its path.
 
-Mở Terminal và gõ lần lượt, nếu mỗi lệnh in ra một phiên bản thì đã sẵn sàng:
+DREAM is a **smart landmark-recording** algorithm: it records landmarks only where
+they are actually needed (turns, speed changes) and **skips** uniform straight
+segments. As a result it **reduces the number of landmarks that must be stored**
+while still returning accurately.
+
+The goal of this README: help you **re-run the tests** and **verify for yourself**
+that the numbers in the draft (the paper) match the actual results.
+
+---
+
+## 1. One-time setup
+
+### 1.1 Prerequisites (quick check)
+
+Open a Terminal and type each command in turn. If each prints a version, you are
+ready:
 
 ```bash
-python3 --version        # mong đợi: Python 3.10.x
-ros2 --help | head -1    # mong đợi: có chữ "usage: ros2"
-ign gazebo --version     # mong đợi: "Gazebo Sim, version 6.18.x"
-Xvfb -help 2>&1 | head -1  # mong đợi: có chữ "use: X"
+python3 --version        # expected: Python 3.10.x
+ros2 --help | head -1    # expected: contains "usage: ros2"
+ign gazebo --version     # expected: "Gazebo Sim, version 6.18.x"
+Xvfb -help 2>&1 | head -1  # expected: contains "use: X"
 ```
 
-Nếu lệnh nào báo `command not found` thì phần đó chưa cài (xem mục 7 để biết cách cài).
+If any command reports `command not found`, that component is not installed (see
+section 7 for how to install it).
 
-### 1.2 Mở đúng thư mục dự án
+### 1.2 Go to the correct project folder
 
-Mỗi lần mở Terminal mới, việc đầu tiên là đi vào thư mục dự án:
+Every time you open a new Terminal, the first thing to do is enter the project
+folder:
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
 ```
 
-> Nếu dự án nằm ở chỗ khác, thay đường dẫn cho đúng. Bạn biết mình đã đúng chỗ khi
-> lệnh `ls` (liệt kê file) hiện ra các tên như `run_gazebo_demo.sh`,
+> If the project is located elsewhere, adjust the path. You know you are in the
+> right place when `ls` (list files) shows names such as `run_gazebo_demo.sh`,
 > `test_auto_recovery_sim.py`, `publish/`, `paper/`...
 
-### 1.3 “Kích hoạt” môi trường ROS 2 (hãy gõ đầu mỗi phiên Terminal)
+### 1.3 “Activate” the ROS 2 environment (type this at the start of every Terminal session)
 
-ROS giống như một “bộ công cụ” cần được bật lên trước khi dùng. Gõ 2 dòng này:
+ROS is like a “toolbox” that must be switched on before use. Type these two lines:
 
 ```bash
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ```
 
-> Sau khi gõ, màn hình **không in ra gì** là bình thường — tức là đã bật thành công.
-> Hai dòng này chỉ có hiệu lực trong **cửa sổ Terminal hiện tại**. Nếu mở Terminal mới,
-> phải gõ lại.
+> It is normal if nothing is printed after you type these lines — that means they
+> succeeded. These two lines only take effect in the **current Terminal window**.
+> If you open a new Terminal, you must type them again.
 >
-> **Mẹo dành cho người mới:** hãy coi 2 dòng này là thao tác “mở khóa” cần làm đầu
-> mỗi phiên làm việc. Có vài lệnh (mục 2.2, 2.3) không bắt buộc cần, nhưng gõ thêm cũng
-> **vô hại** — nên cứ gõ cho chắc, đỡ phải nhớ lệnh nào cần lệnh nào không.
+> **Tip for beginners:** think of these two lines as the “unlock” step to do at the
+> start of every working session. A few commands (sections 2.2, 2.3) do not strictly
+> require them, but typing them is **harmless** — so just type them to be safe and
+> avoid having to remember which command needs them.
 
-### 1.4 Biên dịch lại toàn bộ (chỉ cần làm một lần, hoặc sau khi sửa code)
+### 1.4 Rebuild everything (do this once, or after modifying code)
 
 ```bash
 colcon build --packages-select recovery_interfaces vslam_recovery_core --symlink-install
 ```
 
-Dấu hiệu thành công: dòng cuối cùng có dạng
+Success indicator: the last line looks like
 
 ```
 Summary: 2 packages finished [...]
@@ -79,19 +84,19 @@ Summary: 2 packages finished [...]
 
 ---
 
-## 2. Các phép kiểm tra (chạy từ nhanh → chậm)
+## 2. The checks (run from fast → slow)
 
-> Quy tắc chung: **chạy theo đúng thứ tự**. Các phép ở mục 2.1 → 2.3 chạy trong vài
-> giây đến vài phút và **không cần mở màn hình ảo**. Phép 2.4 và 2.5 cần nhiều thời gian
-> và/hoặc màn hình ảo.
+> General rule: **run them in order**. The checks in sections 2.1 → 2.3 run in a few
+> seconds to a few minutes and **do not need a virtual display**. Checks 2.4 and 2.5
+> need more time and/or a virtual display.
 
 ---
 
-### 2.1 Kiểm tra NHANH nhất: 4 chế độ Auto + mất camera ở 90% (không cần Gazebo)
+### 2.1 FASTEST check: 4 Auto modes + camera loss at 90% (no Gazebo needed)
 
-Đây là phép kiểm tra “tính đúng đắn” cốt lõi: nó chạy **đúng luật điều khiển trong code**
-trên một mô hình robot đơn giản, mất camera ở 90% quãng đường, rồi đo robot có quay về
-được không.
+This is the core “correctness” check: it runs the **actual control law from the code**
+on a simple robot model, loses the camera at 90% of the path, and then measures
+whether the robot returns successfully.
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
@@ -100,7 +105,7 @@ source install/setup.bash
 python3 test_auto_recovery_sim.py
 ```
 
-**Kết quả mong đợi** (4 dòng `PASS` và dòng cuối `ALL PASS`):
+**Expected result** (4 `PASS` lines and a final `ALL PASS` line):
 
 ```
 Mode 1: PASS  n_lm=  9  final_err=0.030 m  wall_margin=0.267 m  obst_clear=0.293 m  coll=None
@@ -110,50 +115,53 @@ Mode 4: PASS  n_lm=  4  final_err=0.030 m  wall_margin=0.309 m  obst_clear=0.215
 RESULT: ALL PASS
 ```
 
-Cách đọc:
+How to read it:
 
-- `n_lm` = số mốc đường DREAM đã ghi (càng ít càng tiết kiệm bộ nhớ).
-- `final_err` = sai số khi quay về điểm xuất phát (đơn vị mét). `0.030` ≈ 3 cm.
-- `coll=None` = **không va chạm** (nếu va chạm sẽ in `wall` hoặc `obstacle`).
-- `wall_margin` / `obst_clear` = khoảng cách an toàn tối thiểu tới tường / vật cản (m).
+- `n_lm` = the number of DREAM landmarks recorded (fewer = more memory saved).
+- `final_err` = the error when returning to the starting point (in meters). `0.030` ≈ 3 cm.
+- `coll=None` = **no collision** (a collision would print `wall` or `obstacle`).
+- `wall_margin` / `obst_clear` = minimum safe distance to the wall / obstacle (m).
 
-**Đây là kết quả bạn đối chiếu với bảng “End-to-end corridor demonstration” trong bài
-báo.** (Lưu ý: bảng trong bài báo dùng số liệu Gazebo thật là `0.060 m`; file này dùng mô
-hình offline nên là `0.030 m` — cả hai đều là quay về chính xác, chỉ khác nguồn dữ liệu.)
+**This is the result you compare with the “End-to-end corridor demonstration” table in
+the paper.** (Note: the paper's table uses real Gazebo data `0.060 m`; this file uses the
+offline model so it is `0.030 m` — both mean the robot returns accurately, they just come
+from different data sources.)
 
 ---
 
-### 2.2 Kiểm tra LÝ THUYẾT: định luật tỉ lệ (không cần robot)
+### 2.2 THEORY check: the scaling law (no robot needed)
 
-Phép này xác nhận công thức toán học trong bài báo (`L ≈ 1 − c(κW)²`, `c ≈ 0.0168`).
+This check confirms the mathematical formula in the paper
+(`L ≈ 1 − c(κW)²`, `c ≈ 0.0168`).
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
 python3 dream_theory_check.py
 ```
 
-**Kết quả mong đợi:** dòng gần cuối in ra `c ~= 0.01681`, và các giá trị cột
-`(1-linear)/(kW)^2` đều nằm quanh `0.0168` (0.01679 → 0.01683).
+**Expected result:** a line near the end prints `c ~= 0.01681`, and the values in the
+`(1-linear)/(kW)^2` column are all around `0.0168` (0.01679 → 0.01683).
 
-> Con số `c ≈ 0.0168` này phải khớp với bài báo (trước đây từng viết nhầm `0.0167`,
-> đã sửa lại — nếu bạn thấy tài liệu nào còn ghi `0.0167` thì đó là bản cũ).
+> The value `c ≈ 0.0168` must match the paper (an earlier version mistakenly wrote
+> `0.0167`, which has been corrected — if you see any document still saying `0.0167`,
+> it is an old version).
 
 ---
 
-### 2.3 Kiểm tra SỐ LIỆU benchmark trên dữ liệu Gazebo ĐÃ GHI
+### 2.3 Benchmark DATA check on RECORDED Gazebo data
 
-Thư mục `bench_data/` chứa **dữ liệu odometry thật** đã ghi từ Gazebo cho 3 thế giới:
-`odom_A.csv` (hành lang thẳng), `odom_B.csv` (slalom), `odom_C.csv` (chữ S).
-Các lệnh dưới đây **tính lại các bảng trong bài báo** từ chính dữ liệu đó.
+The `bench_data/` folder contains **real odometry data** recorded from Gazebo for 3
+worlds: `odom_A.csv` (straight corridor), `odom_B.csv` (slalom), `odom_C.csv`
+(S-shaped). The commands below **recompute the tables in the paper** from that data.
 
-#### 2.3.1 Bảng DR / sai số quay về (bảng chính)
+#### 2.3.1 DR / recovery-error table (main table)
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
 python3 run_gazebo_benchmark.py --compare
 ```
 
-**Kết quả mong đợi** (chú ý cột cuối `PE_*_cl` đều bằng `0.030`):
+**Expected result** (note the last `PE_*_cl` column is always `0.030`):
 
 ```
 [A] ... N_baseline=18 N_dream=2  DR= 88.9%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
@@ -161,49 +169,51 @@ python3 run_gazebo_benchmark.py --compare
 [C] ... N_baseline=12 N_dream=7  DR= 41.7%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
 ```
 
-Ý nghĩa: DREAM giảm số mốc 88.9% / 40.0% / 41.7% mà **sai số quay về vẫn 0.030 m**
-(giống baseline). Đây chính là bảng “Landmark count, data reduction, and closed-loop
-recovery error” trong bài.
+Meaning: DREAM reduces the number of landmarks by 88.9% / 40.0% / 41.7% while the
+**recovery error stays at 0.030 m** (same as baseline). This is the “Landmark count,
+data reduction, and closed-loop recovery error” table in the paper.
 
-#### 2.3.2 Bảng quét ngưỡng R²_th
+#### 2.3.2 R²_th threshold sweep table
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
 python3 sweep_r2_threshold.py
 ```
 
-**Kết quả mong đợi:** với mọi ngưỡng tái tạo được (≥ 2 mốc), cột `PE_dream_cl` đều
-`0.030 m`; chỉ những trường hợp chỉ còn `1` mốc mới in `inf`.
+**Expected result:** for every reconstructable threshold (≥ 2 landmarks), the
+`PE_dream_cl` column is `0.030 m`; only cases with just `1` landmark print `inf`.
 
-#### 2.3.3 Bảng Monte-Carlo (nhiễu) và ablation
+#### 2.3.3 Monte-Carlo (noise) and ablation tables
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
 python3 run_gazebo_benchmark.py --mc --runs 20 --noise 0.02 --ablate
 ```
 
-**Kết quả mong đợi:** các dòng `Monte-Carlo` in `PE_dream_cl=0.030±0.000 m`; các dòng
-ablation in `PE_cl` = `0.030` (trừ trường hợp `regress_speed=False` ở thế giới A in `inf`).
+**Expected result:** the `Monte-Carlo` lines print `PE_dream_cl=0.030±0.000 m`; the
+ablation lines print `PE_cl` = `0.030` (except `regress_speed=False` in world A, which
+prints `inf`).
 
-#### 2.3.4 Bảng so sánh với 4 phương pháp khác (trên dữ liệu Gazebo)
+#### 2.3.4 Comparison with 4 other methods (on Gazebo data)
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
 python3 benchmark_baselines_gazebo.py --mc
 ```
 
-**Kết quả mong đợi:** in 3 khối (World A/B/C), mỗi khối 5 dòng. Dòng cuối mỗi khối là
-`dream (R2_th=0.98)`. Đối chiếu với bảng “Offline baseline comparison” trong bài:
-- World A: DREAM `N≈3.0`, `path_max≈0.006` (nhỏ hơn Nyquist `0.206` rất nhiều).
-- World B: DREAM `N≈13.9`, `path_max≈0.069` (nhỏ hơn Nyquist `0.142`).
-- World C: DREAM `N≈8.5`, `path_max≈0.130` (cỡ Nyquist `0.116`, nhưng ít mốc hơn).
+**Expected result:** prints 3 blocks (World A/B/C), 5 lines each. The last line of each
+block is `dream (R2_th=0.98)`. Compare with the “Offline baseline comparison” table in
+the paper:
+- World A: DREAM `N≈3.0`, `path_max≈0.006` (much smaller than Nyquist `0.206`).
+- World B: DREAM `N≈13.9`, `path_max≈0.069` (smaller than Nyquist `0.142`).
+- World C: DREAM `N≈8.5`, `path_max≈0.130` (around Nyquist `0.116`, but fewer landmarks).
 
 ---
 
-### 2.4 Kiểm tra ĐẦY ĐỦ trên Gazebo thật (headless, chậm ~15 phút)
+### 2.4 FULL check on real Gazebo (headless, slow ~15 min)
 
-Phép này chạy **toàn bộ hệ thống ROS 2 thật** (Gazebo không giao diện + các node ROS)
-để lái robot và quay về. Chạy cả 4 chế độ Auto:
+This check runs the **entire real ROS 2 system** (headless Gazebo + ROS nodes) to drive
+the robot and return it home. It runs all 4 Auto modes:
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
@@ -212,7 +222,7 @@ source install/setup.bash
 python3 run_headless_auto_test.py
 ```
 
-**Kết quả mong đợi** (4 dòng `PASS`):
+**Expected result** (4 `PASS` lines):
 
 ```
 Mode 1: PASS  final_err=0.060 m  wall=0.267 m  obst=0.293 m  coll=None
@@ -221,23 +231,23 @@ Mode 3: PASS  final_err=0.060 m  wall=0.309 m  obst=0.205 m  coll=None
 Mode 4: PASS  final_err=0.060 m  wall=0.310 m  obst=0.214 m  coll=None
 ```
 
-> Muốn chạy nhanh hơn (chỉ 1 chế độ), thêm `--mode 4` vào cuối lệnh.
+> To run faster (one mode only), add `--mode 4` to the end of the command.
 
 ---
 
-### 2.5 Kiểm tra GIAO DIỆN (Gazebo GUI + RViz + Dashboard, tùy chọn)
+### 2.5 GUI check (Gazebo GUI + RViz + Dashboard, optional)
 
-Bước này mở **cửa sổ đồ họa** để bạn thấy tận mắt. Vì máy chạy không có màn hình vật lý
-nên cần **màn hình ảo Xvfb** trước.
+This step opens **graphical windows** so you can see the system with your own eyes.
+Because the machine has no physical display, you need a **virtual Xvfb display** first.
 
-Mở một Terminal và gõ:
+Open a Terminal and type:
 
 ```bash
 Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp &
 export DISPLAY=:99
 ```
 
-Rồi trong cùng Terminal đó:
+Then, in the same Terminal:
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
@@ -246,104 +256,104 @@ source install/setup.bash
 ./run_gazebo_demo.sh
 ```
 
-Dấu hiệu thành công: log hiện các dòng `Dashboard GUI started.`, `rviz2`, và `ign gazebo`
-đang chạy; các topic `/odom_raw`, `/odom`, `/cmd_vel` xuất hiện.
+Success indicator: the log shows `Dashboard GUI started.`, `rviz2`, and `ign gazebo`
+running; the topics `/odom_raw`, `/odom`, `/cmd_vel` appear.
 
-Muốn **nhìn từ máy khác** (VNC), mở thêm một Terminal:
+To **view from another machine** (VNC), open an additional Terminal:
 
 ```bash
 x11vnc -display :99 -forever -nopw -rfbport 5900
 ```
 
-rồi dùng VNC client kết nối tới `địa_chỉ_máy:5900`.
+then use a VNC client to connect to `machine_address:5900`.
 
 ---
 
-## 3. Đối chiếu nhanh: “bài báo nói gì ↔ chạy lệnh nào”
+## 3. Quick cross-reference: “what the paper says ↔ which command to run”
 
-| Nội dung trong bài báo | Lệnh kiểm tra | Con số cần khớp |
+| Content in the paper | Check command | Number that must match |
 |---|---|---|
-| Bảng DR / sai số quay về (3 thế giới) | `python3 run_gazebo_benchmark.py --compare` | DR `88.9/40.0/41.7%`, PE `0.030 m` |
-| Bảng quét ngưỡng R²_th | `python3 sweep_r2_threshold.py` | PE `0.030 m` (trừ `inf`) |
-| Bảng lý thuyết (c ≈ 0.0168) | `python3 dream_theory_check.py` | `c ~= 0.0168` |
-| Bảng Monte-Carlo | `run_gazebo_benchmark.py --mc ...` | PE `0.030±0.000 m` |
-| Bảng ablation | `run_gazebo_benchmark.py ... --ablate` | PE `0.030` (trừ `inf`) |
-| Bảng so sánh 5 phương pháp | `python3 benchmark_baselines_gazebo.py --mc` | N / path_max như mục 2.3.4 |
-| Bảng 4 chế độ Auto + 90% failure | `python3 test_auto_recovery_sim.py` (offline) hoặc `run_headless_auto_test.py` (Gazebo thật) | lỗi `0.030 m` (offline) / `0.060 m` (Gazebo), `coll=None` |
+| DR / recovery-error table (3 worlds) | `python3 run_gazebo_benchmark.py --compare` | DR `88.9/40.0/41.7%`, PE `0.030 m` |
+| R²_th threshold sweep table | `python3 sweep_r2_threshold.py` | PE `0.030 m` (except `inf`) |
+| Theory table (c ≈ 0.0168) | `python3 dream_theory_check.py` | `c ~= 0.0168` |
+| Monte-Carlo table | `run_gazebo_benchmark.py --mc ...` | PE `0.030±0.000 m` |
+| Ablation table | `run_gazebo_benchmark.py ... --ablate` | PE `0.030` (except `inf`) |
+| 5-method comparison table | `python3 benchmark_baselines_gazebo.py --mc` | N / path_max as in 2.3.4 |
+| 4 Auto modes + 90% failure table | `python3 test_auto_recovery_sim.py` (offline) or `run_headless_auto_test.py` (real Gazebo) | error `0.030 m` (offline) / `0.060 m` (Gazebo), `coll=None` |
 
 ---
 
-## 4. Cách tự đọc kết quả “đúng” hay “sai”
+## 4. How to tell whether a result is “correct” or “wrong”
 
-Một phép kiểm tra được coi là **ĐẠT** khi:
+A check is considered **PASSED** when:
 
-1. Robot **quay về** điểm xuất phát: `final_err` hoặc `PE_*_cl` nhỏ (≤ 0.06 m).
-2. **Không va chạm**: `coll=None` (hoặc không xuất hiện chữ `wall`/`obstacle`).
-3. **Số mốc DREAM nhỏ hơn baseline**: `N_dream < N_baseline` (đó là mục đích giảm dữ liệu).
+1. The robot **returns** to the starting point: `final_err` or `PE_*_cl` is small (≤ 0.06 m).
+2. **No collision**: `coll=None` (or the words `wall`/`obstacle` do not appear).
+3. **DREAM uses fewer landmarks than baseline**: `N_dream < N_baseline` (that is the point of data reduction).
 
-Nếu bạn thấy:
-- `FAIL` hoặc `coll=wall` / `coll=obstacle` → hệ thống có lỗi cần sửa.
-- `PE = inf` → đường đi bị nén quá mức (chỉ còn 1 mốc), không tái tạo được.
-- `ImportError ... librcl_action.so` → bạn **quên gõ 2 dòng `source ...`** ở mục 1.3.
-
----
-
-## 5. Các file quan trọng (để bạn biết cái gì nằm ở đâu)
-
-- `src/vslam_recovery_core/src/dream_core.py` — thuật toán DREAM (lõi).
-- `src/vslam_recovery_core/src/dream_sampler_node.py` — node ROS 2 ghi mốc DREAM.
-- `src/vslam_recovery_core/src/recovery_controller.cpp` — bộ điều khiển **quay về vòng kín**.
-- `src/vslam_recovery_core/src/recovery_recorder_server.cpp` — node ghi mốc vào YAML.
-- `src/vslam_recovery_core/src/recovery_dashboard_gui.py` — giao diện điều khiển (4 chế độ Auto).
-- `test_auto_recovery_sim.py` — kiểm tra nhanh (offline).
-- `run_headless_auto_test.py` — kiểm tra đầy đủ Gazebo headless.
-- `run_gazebo_benchmark.py`, `sweep_r2_threshold.py`, `benchmark_baselines_gazebo.py` — sinh các bảng benchmark.
-- `bench_data/odom_A/B/C.csv` — dữ liệu odometry Gazebo đã ghi.
-- `publish/DREAM-ROS2-IEEE.tex` — bản thảo bài báo IEEE Access.
-- `publish/DREAM-ROS2-IEEE.pdf` — bản PDF đã biên dịch.
-- `paper/benchmark_results.md` — ghi chú chi tiết kết quả + lệnh tái lập.
+If you see:
+- `FAIL` or `coll=wall` / `coll=obstacle` → the system has an error that needs fixing.
+- `PE = inf` → the path was over-compressed (only 1 landmark left), so it cannot be reconstructed.
+- `ImportError ... librcl_action.so` → you **forgot to type the two `source ...` lines** in section 1.3.
 
 ---
 
-## 6. Câu lệnh “tất cả trong một” (nếu bạn muốn nhanh)
+## 5. Important files (so you know where things live)
 
-Sao chép toàn bộ khối này và dán vào Terminal (sau khi đã làm mục 1.3):
+- `src/vslam_recovery_core/src/dream_core.py` — the DREAM algorithm (core).
+- `src/vslam_recovery_core/src/dream_sampler_node.py` — the ROS 2 node that records DREAM landmarks.
+- `src/vslam_recovery_core/src/recovery_controller.cpp` — the **closed-loop return** controller.
+- `src/vslam_recovery_core/src/recovery_recorder_server.cpp` — the node that writes landmarks to YAML.
+- `src/vslam_recovery_core/src/recovery_dashboard_gui.py` — the control GUI (4 Auto modes).
+- `test_auto_recovery_sim.py` — quick check (offline).
+- `run_headless_auto_test.py` — full headless Gazebo check.
+- `run_gazebo_benchmark.py`, `sweep_r2_threshold.py`, `benchmark_baselines_gazebo.py` — generate the benchmark tables.
+- `bench_data/odom_A/B/C.csv` — recorded Gazebo odometry data.
+- `publish/DREAM-ROS2-IEEE.tex` — the IEEE Access paper draft.
+- `publish/DREAM-ROS2-IEEE.pdf` — the compiled PDF.
+- `paper/benchmark_results.md` — detailed result notes + reproduction commands.
+
+---
+
+## 6. “All in one” command (if you want it quick)
+
+Copy this entire block and paste it into a Terminal (after completing section 1.3):
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-echo "== 1) Offline 4 chế độ ==" && python3 test_auto_recovery_sim.py
-echo "== 2) Lý thuyết ==" && python3 dream_theory_check.py
+echo "== 1) Offline 4 modes ==" && python3 test_auto_recovery_sim.py
+echo "== 2) Theory ==" && python3 dream_theory_check.py
 echo "== 3) Benchmark DR/PE ==" && python3 run_gazebo_benchmark.py --compare
-echo "== 4) Quét ngưỡng ==" && python3 sweep_r2_threshold.py
-echo "== 5) So sánh 5 phương pháp ==" && python3 benchmark_baselines_gazebo.py --mc
+echo "== 4) Threshold sweep ==" && python3 sweep_r2_threshold.py
+echo "== 5) Compare 5 methods ==" && python3 benchmark_baselines_gazebo.py --mc
 ```
 
 ---
 
-## 7. Cài đặt khi thiếu thành phần (chỉ khi mục 1.1 báo thiếu)
+## 7. Installing missing components (only when section 1.1 reports something missing)
 
 ```bash
-# ROS 2 Humble + Gazebo Fortress (làm theo trang chính thức của ROS 2 cho Ubuntu 22.04)
-# Màn hình ảo Xvfb (để mở giao diện không cần màn hình thật):
+# ROS 2 Humble + Gazebo Fortress (follow the official ROS 2 guide for Ubuntu 22.04)
+# Virtual display Xvfb (to open the GUI without a real screen):
 sudo apt-get update
 sudo apt-get install -y xvfb x11-utils
-# Xem giao diện từ xa qua VNC (tùy chọn):
+# Remote GUI viewing via VNC (optional):
 sudo apt-get install -y x11vnc
 ```
 
-> Lưu ý: lệnh `sudo apt-get ...` cần mật khẩu quản trị (root). Nếu bạn đang ở trong một
-> môi trường sandbox bị chặn `sudo` thì phải chạy các lệnh cài đặt này trên máy/container
-> của chính bạn.
+> Note: the `sudo apt-get ...` commands require the administrator (root) password. If you
+> are inside a sandbox where `sudo` is blocked, you must run these install commands on
+> your own machine/container.
 
 ---
 
-## 8. Nếu kết quả không khớp
+## 8. If the results do not match
 
-Ghi lại **toàn bộ nội dung Terminal** (chụp màn hình hoặc copy) và báo lại, kèm theo:
-1. Bạn đang ở bước số mấy.
-2. Dòng lệnh bạn đã chạy.
-3. 5–10 dòng cuối cùng hiện ra trên màn hình.
+Record the **entire Terminal output** (screenshot or copy) and report it, including:
+1. Which step you are on.
+2. The exact command you ran.
+3. The last 5–10 lines shown on the screen.
 
-Như vậy người hỗ trợ sẽ biết chính xác chỗ sai mà không cần đoán.
+That way the person helping you will know exactly what went wrong without guessing.
