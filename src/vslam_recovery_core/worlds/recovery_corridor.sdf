@@ -1,0 +1,431 @@
+<?xml version="1.0" ?>
+<!--
+  recovery_corridor.sdf
+
+  Blind navigation recovery test world for Gazebo Fortress, reproducing the
+  experimental setup of the paper (Section 5, 5.1; Figures 10/12/13; Tables
+  III/V/VI):
+
+    * corridor width  = 1.7 m (walls at y = +/-0.85 m);
+    * corridor length = 15 m  (supports the 2.6 m .. 13.2 m tests of Table VI);
+    * two parallel yellow guide lines for the robot to follow the centre axis;
+    * two staggered cylindrical obstacles (r = 0.2 m, h = 0.6 m):
+        obstacle 1 at x = 1.5 m, y =  0.3 m (left);
+        obstacle 2 at x = 3.0 m, y = -0.3 m (right) -> zig-zag S-curve;
+    * a differential-drive robot (Kobuki/TurtleBot class) with:
+        - gz-sim diff-drive plugin  (input /cmd_vel, output /odom),
+        - RGB camera  -> /camera (image stream),
+        - depth camera (RGB-D) -> /depth_camera,
+        - IMU (angular velocity / orientation) -> /imu,
+        - odometry-publisher -> OdometryWithCovariance on
+          /model/recovery_robot/odometry_cov.
+-->
+<sdf version="1.6">
+  <world name="recovery_corridor">
+
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="ignition-gazebo-physics-system"
+            name="gz::sim::systems::Physics">
+    </plugin>
+    <plugin filename="ignition-gazebo-sensors-system"
+            name="gz::sim::systems::Sensors">
+      <render_engine>ogre</render_engine>
+    </plugin>
+    <plugin filename="ignition-gazebo-imu-system"
+            name="gz::sim::systems::Imu">
+    </plugin>
+    <plugin filename="ignition-gazebo-user-commands-system"
+            name="gz::sim::systems::UserCommands">
+    </plugin>
+    <plugin filename="ignition-gazebo-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster">
+    </plugin>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>7.5 0 8 0 0 0</pose>
+      <diffuse>1 1 1 1</diffuse>
+      <specular>0.5 0.5 0.5 1</specular>
+      <direction>-0.4 0.05 -0.9</direction>
+    </light>
+
+    <scene>
+      <ambient>0.6 0.6 0.6</ambient>
+      <background>0.7 0.7 0.7</background>
+      <grid>true</grid>
+    </scene>
+
+    <!-- Ground plane -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.85 0.85 0.85 1</ambient>
+            <diffuse>0.85 0.85 0.85 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Corridor walls: 15 m long, 1.7 m wide (y = +/-0.85) -->
+    <model name="left_wall">
+      <static>true</static>
+      <pose>7.5 0.9 0.2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>15 0.1 0.4</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>15 0.1 0.4</size></box></geometry>
+          <material>
+            <ambient>0.55 0.55 0.55 1</ambient>
+            <diffuse>0.65 0.65 0.65 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="right_wall">
+      <static>true</static>
+      <pose>7.5 -0.9 0.2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>15 0.1 0.4</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>15 0.1 0.4</size></box></geometry>
+          <material>
+            <ambient>0.55 0.55 0.55 1</ambient>
+            <diffuse>0.65 0.65 0.65 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="end_wall">
+      <static>true</static>
+      <pose>15 0 0.2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.1 1.8 0.4</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.1 1.8 0.4</size></box></geometry>
+          <material>
+            <ambient>0.55 0.55 0.55 1</ambient>
+            <diffuse>0.65 0.65 0.65 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Two parallel yellow guide lines (visual only) along the corridor. -->
+    <model name="guide_line_left">
+      <static>true</static>
+      <pose>7.5 0.15 0.001 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>15 0.02 0.002</size></box></geometry>
+          <material>
+            <ambient>1 1 0 1</ambient>
+            <diffuse>1 1 0 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="guide_line_right">
+      <static>true</static>
+      <pose>7.5 -0.15 0.001 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>15 0.02 0.002</size></box></geometry>
+          <material>
+            <ambient>1 1 0 1</ambient>
+            <diffuse>1 1 0 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Two staggered cylindrical obstacles (r = 0.2 m, h = 0.6 m). -->
+    <model name="obstacle_a">
+      <static>true</static>
+      <pose>1.5 0.3 0.3 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.2</radius><length>0.6</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.2</radius><length>0.6</length></cylinder></geometry>
+          <material>
+            <ambient>0.9 0.15 0.15 1</ambient>
+            <diffuse>0.9 0.15 0.15 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obstacle_b">
+      <static>true</static>
+      <pose>3.0 -0.3 0.3 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.2</radius><length>0.6</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.2</radius><length>0.6</length></cylinder></geometry>
+          <material>
+            <ambient>0.9 0.15 0.15 1</ambient>
+            <diffuse>0.9 0.15 0.15 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Differential drive robot, spawned at the corridor centre (x=0, y=0). -->
+    <model name="recovery_robot">
+      <pose>0 0 0.05 0 0 0</pose>
+
+      <link name="chassis">
+        <pose>0 0 0.05 0 0 0</pose>
+        <inertial>
+          <mass>1.0</mass>
+          <inertia>
+            <ixx>0.005</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.009</iyy>
+            <iyz>0</iyz>
+            <izz>0.011</izz>
+          </inertia>
+        </inertial>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.2 0.12</size></box></geometry>
+          <material>
+            <ambient>0.2 0.4 0.9 1</ambient>
+            <diffuse>0.2 0.4 0.9 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry><box><size>0.3 0.2 0.12</size></box></geometry>
+        </collision>
+        <sensor name="imu" type="imu">
+          <always_on>1</always_on>
+          <update_rate>100</update_rate>
+          <visualize>true</visualize>
+          <topic>imu</topic>
+        </sensor>
+      </link>
+
+      <link name="left_wheel">
+        <pose>0 0.12 0 0 0 0</pose>
+        <inertial>
+          <mass>0.05</mass>
+          <inertia>
+            <ixx>0.00005</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.00005</iyy>
+            <iyz>0</iyz>
+            <izz>0.00005</izz>
+          </inertia>
+        </inertial>
+        <visual name="visual">
+          <geometry><sphere><radius>0.05</radius></sphere></geometry>
+          <material>
+            <ambient>0.15 0.15 0.15 1</ambient>
+            <diffuse>0.2 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry><sphere><radius>0.05</radius></sphere></geometry>
+        </collision>
+      </link>
+
+      <link name="right_wheel">
+        <pose>0 -0.12 0 0 0 0</pose>
+        <inertial>
+          <mass>0.05</mass>
+          <inertia>
+            <ixx>0.00005</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.00005</iyy>
+            <iyz>0</iyz>
+            <izz>0.00005</izz>
+          </inertia>
+        </inertial>
+        <visual name="visual">
+          <geometry><sphere><radius>0.05</radius></sphere></geometry>
+          <material>
+            <ambient>0.15 0.15 0.15 1</ambient>
+            <diffuse>0.2 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry><sphere><radius>0.05</radius></sphere></geometry>
+        </collision>
+      </link>
+
+      <link name="caster">
+        <pose>0.13 0 -0.03 0 0 0</pose>
+        <inertial>
+          <mass>0.02</mass>
+          <inertia>
+            <ixx>0.000003</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000003</iyy>
+            <iyz>0</iyz>
+            <izz>0.000003</izz>
+          </inertia>
+        </inertial>
+        <visual name="visual">
+          <geometry><sphere><radius>0.02</radius></sphere></geometry>
+          <material>
+            <ambient>0.15 0.15 0.15 1</ambient>
+            <diffuse>0.2 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry><sphere><radius>0.02</radius></sphere></geometry>
+        </collision>
+      </link>
+
+      <!-- RGB-D camera: an RGB sensor plus a depth sensor on one link. -->
+      <link name="camera_link">
+        <pose>0.15 0 0.06 0 0 0</pose>
+        <inertial>
+          <mass>0.05</mass>
+          <inertia>
+            <ixx>0.00003</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.00003</iyy>
+            <iyz>0</iyz>
+            <izz>0.00003</izz>
+          </inertia>
+        </inertial>
+        <visual name="visual">
+          <geometry><box><size>0.04 0.04 0.04</size></box></geometry>
+          <material>
+            <ambient>0.1 0.1 0.1 1</ambient>
+            <diffuse>0.1 0.1 0.1 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry><box><size>0.04 0.04 0.04</size></box></geometry>
+        </collision>
+        <sensor name="camera" type="camera">
+          <camera>
+            <horizontal_fov>1.047</horizontal_fov>
+            <image>
+              <width>640</width>
+              <height>480</height>
+            </image>
+            <clip>
+              <near>0.05</near>
+              <far>50</far>
+            </clip>
+          </camera>
+          <always_on>1</always_on>
+          <update_rate>30</update_rate>
+          <visualize>true</visualize>
+          <topic>camera</topic>
+        </sensor>
+        <sensor name="depth_camera" type="depth_camera">
+          <update_rate>10</update_rate>
+          <topic>depth_camera</topic>
+          <camera>
+            <horizontal_fov>1.047</horizontal_fov>
+            <image>
+              <width>640</width>
+              <height>480</height>
+            </image>
+            <clip>
+              <near>0.05</near>
+              <far>10</far>
+            </clip>
+          </camera>
+          <always_on>1</always_on>
+          <visualize>true</visualize>
+        </sensor>
+      </link>
+
+      <joint name="left_wheel_joint" type="revolute">
+        <parent>chassis</parent>
+        <child>left_wheel</child>
+        <axis><xyz>0 1 0</xyz></axis>
+      </joint>
+
+      <joint name="right_wheel_joint" type="revolute">
+        <parent>chassis</parent>
+        <child>right_wheel</child>
+        <axis><xyz>0 1 0</xyz></axis>
+      </joint>
+
+      <joint name="caster_joint" type="ball">
+        <parent>chassis</parent>
+        <child>caster</child>
+      </joint>
+
+      <joint name="camera_joint" type="fixed">
+        <parent>chassis</parent>
+        <child>camera_link</child>
+      </joint>
+
+      <!-- Differential drive: listens /model/recovery_robot/cmd_vel and
+           publishes odometry + tf. -->
+      <plugin filename="ignition-gazebo-diff-drive-system"
+              name="gz::sim::systems::DiffDrive">
+        <left_joint>left_wheel_joint</left_joint>
+        <right_joint>right_wheel_joint</right_joint>
+        <wheel_separation>0.24</wheel_separation>
+        <wheel_radius>0.05</wheel_radius>
+        <odom_publish_frequency>50</odom_publish_frequency>
+        <topic>/model/recovery_robot/cmd_vel</topic>
+        <max_linear_acceleration>1.0</max_linear_acceleration>
+        <min_linear_acceleration>-1.0</min_linear_acceleration>
+        <max_angular_acceleration>2.0</max_angular_acceleration>
+        <min_angular_acceleration>-2.0</min_angular_acceleration>
+        <max_linear_velocity>0.3</max_linear_velocity>
+        <min_linear_velocity>-0.3</min_linear_velocity>
+        <max_angular_velocity>1.5</max_angular_velocity>
+        <min_angular_velocity>-1.5</min_angular_velocity>
+      </plugin>
+
+      <!-- Publish OdometryWithCovariance (used for the /odom bridge). -->
+      <plugin filename="ignition-gazebo-odometry-publisher-system"
+              name="ignition::gazebo::systems::OdometryPublisher">
+        <dimensions>3</dimensions>
+        <odom_frame>odom</odom_frame>
+        <robot_base_frame>chassis</robot_base_frame>
+        <odom_topic>/model/recovery_robot/odometry_plain</odom_topic>
+        <odom_covariance_topic>/model/recovery_robot/odometry_cov</odom_covariance_topic>
+        <odom_publish_frequency>50</odom_publish_frequency>
+      </plugin>
+
+    </model>
+
+  </world>
+</sdf>

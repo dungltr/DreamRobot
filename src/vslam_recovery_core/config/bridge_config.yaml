@@ -1,0 +1,74 @@
+# bridge_config.yaml
+#
+# ros_gz_bridge configuration for the paper-replication simulation.
+#
+# Maps the Gazebo Fortress topics of the recovery_robot model to the ROS 2
+# topics consumed by the recovery layer and the visualization tools.
+#
+# Topic names were verified against a running headless Gazebo instance
+# (`ign topic -l`). Sensor topics are published at the world scope:
+#   /camera, /camera_info, /depth_camera, /imu.
+# The odometry/tf topics are model-scoped:
+#   /model/recovery_robot/odometry_cov, /model/recovery_robot/tf.
+#
+# IMPORTANT: the bridge publishes/subscribes ROS topics with the RELIABLE QoS
+# profile (KeepLast, default reliability). RViz camera/image displays must
+# therefore subscribe with `Reliability Policy: Reliable`, otherwise the image
+# panel shows `Status: Error` / `No Image received`.
+
+- ros_topic_name: "/cmd_vel"
+  gz_topic_name: "/model/recovery_robot/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: BIDIRECTIONAL
+
+# The Gazebo odometry is bridged to /odom_raw, then the odom_sanitizer node
+# normalizes the quaternion and republishes a clean /odom for RViz and the
+# recovery nodes.
+- ros_topic_name: "/odom_raw"
+  gz_topic_name: "/model/recovery_robot/odometry_cov"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.OdometryWithCovariance"
+  direction: GZ_TO_ROS
+
+# Camera image + calibration. GZ_TO_ROS only: the /camera and /camera_info
+# topics are owned by the gz-sim camera sensor, so a bidirectional bridge
+# would publish a second stream onto the sensor-owned topic and interleave
+# messages. ROS subscribers (RViz) receive the image on /camera/image_raw.
+- ros_topic_name: "/camera/image_raw"
+  gz_topic_name: "/camera"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/camera/camera_info"
+  gz_topic_name: "/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/camera/depth/image_raw"
+  gz_topic_name: "/depth_camera"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/imu"
+  gz_topic_name: "/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS
+
+# Gazebo's scene/diff-drive TF tree uses model-scoped frame names
+# (recovery_robot/...), which do not match the ROS URDF frames (base_link,
+# camera_link). The path_visualizer node already broadcasts the clean
+# odom -> base_link transform from the sanitized odometry, and
+# robot_state_publisher + static_transform_publisher complete the
+# base_link -> camera_link -> camera_optical_frame chain. This bridge is kept
+# for telemetry but publishes to /tf_gz so it cannot conflict with the ROS
+# /tf tree used by RViz.
+- ros_topic_name: "/tf_gz"
+  gz_topic_name: "/model/recovery_robot/tf"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS

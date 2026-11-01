@@ -1,0 +1,358 @@
+#!/usr/bin/env python3
+"""
+run_headless_auto_test.py
+
+Headless Gazebo + ROS 2 end-to-end test of the four dashboard auto modes with
+a simulated camera failure at 90% of the forward distance.
+
+The script starts the real stack — Gazebo server (sensor-free headless world),
+ros_gz_bridge, odom_sanitizer, recovery_recorder_server, dream_sampler_node and
+recovery_controller — plus a headless auto-driver that reuses the exact
+dashboard control methods (`recovery_dashboard_gui`).
+
+For every mode it measures the final return error and checks that the robot
+never collides with the corridor walls or the two obstacles. A mode passes when
+the robot returns within 0.15 m and the safety margins stay positive.
+
+Usage:
+  source /opt/ros/humble/setup.bash && source install/setup.bash
+  python3 run_headless_auto_test.py             # all modes 1..4
+  python3 run_headless_auto_test.py --mode 4    # only Auto 4
+"""
+
+import argparse
+import math
+import os
+import re
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Bool
+
+WS = os.path.dirname(os.path.realpath(__file__))
+SRC = os.path.join(WS, "src", "vslam_recovery_core", "src")
+sys.path.insert(0, SRC)
+
+import optimal_trajectory as ot               # noqa: E402
+import recovery_dashboard_gui as dash         # noqa: E402
+
+WORLD_SRC = os.path.join(WS, "src", "vslam_recovery_core", "worlds",
+                         "recovery_corridor.sdf")
+OBSTACLES = [(1.5, 0.3), (3.0, -0.3)]
+OBST_R = 0.20
+WALL_Y = 0.85
+ROBOT_HW = 0.15
+ROBOT_HD = 0.10
+DT = 1.0 / 20.0
+PASS_ERROR = 0.15
+
+
+def norm(a):
+    while a > math.pi:
+        a -= 2.0 * math.pi
+    while a < -math.pi:
+        a += 2.0 * math.pi
+    return a
+
+
+def clamp(v, lo, hi):
+    return max(lo, min(hi, v))
+
+
+def make_headless_world(dst):
+    src = open(WORLD_SRC).read()
+    src = re.sub(r'\s*<plugin filename="ignition-gazebo-sensors-system".*?</plugin>\n',
+                 '\n', src, flags=re.S)
+    src = re.sub(r'\s*<sensor[^>]*>.*?</sensor>\n', '\n', src, flags=re.S)
+    src = re.sub(r'\s*<plugin filename="ignition-gazebo-imu-system".*?</plugin>\n',
+                 '\n', src, flags=re.S)
+    with open(dst, "w") as fh:
+        fh.write(src)
+
+
+def write_bridge_config(dst):
+    with open(dst, "w") as fh:
+        fh.write(
+            '- ros_topic_name: "/cmd_vel"\n'
+            '  gz_topic_name: "/model/recovery_robot/cmd_vel"\n'
+            '  ros_type_name: "geometry_msgs/msg/Twist"\n'
+            '  gz_type_name: "gz.msgs.Twist"\n'
+            '  direction: BIDIRECTIONAL\n'
+            '- ros_topic_name: "/odom_raw"\n'
+            '  gz_topic_name: "/model/recovery_robot/odometry_cov"\n'
+            '  ros_type_name: "nav_msgs/msg/Odometry"\n'
+            '  gz_type_name: "gz.msgs.OdometryWithCovariance"\n'
+            '  direction: GZ_TO_ROS\n')
+
+
+def start(cmd):
+    return subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def kill(proc):
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGINT)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+    time.sleep(0.5)
+    if proc.poll() is None:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+class AutoDriver(Node):
+    """Headless replacement for the dashboard's closed-loop auto navigation."""
+
+    def __init__(self, mode):
+        super().__init__("headless_auto_driver")
+        self.mode = mode
+        self.auto_mode = mode
+        self.world = "recovery_corridor.sdf"
+        ot.configure(self.world)
+        self.auto_waypoints = ot.waypoints(self.world)
+        self.auto_wp_idx = 0
+        self.auto_phase = "turn"
+        self.auto_active = False
+        self.auto_last_v = 0.0
+        self.auto_last_w = 0.0
+        self.cur_x = 0.0
+        self.cur_y = 0.0
+        self.cur_yaw = 0.0
+        self.forward_dist = 0.0
+        self.last_pos = None
+        self.triggered = False
+
+        self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_cb, 10)
+        self.cmd_pub = self.create_publisher(Twist, "/cmd_vel", 10)
+        self.trigger_pub = self.create_publisher(Bool, "/camera_failure_trigger", 10)
+        self.timer = self.create_timer(DT, self.tick)
+
+    def stop_auto_run(self):
+        self.auto_active = False
+        self.auto_last_v = 0.0
+        self.auto_last_w = 0.0
+        self.cmd_pub.publish(Twist())
+
+    def start_auto_run(self):
+        self.auto_waypoints = ot.waypoints(self.world)
+        self.auto_wp_idx = 0
+        self.auto_phase = "turn"
+        self.auto_active = True
+        self.auto_last_v = 0.0
+        self.auto_last_w = 0.0
+
+    def odom_cb(self, msg):
+        p = msg.pose.pose.position
+        if not all(math.isfinite(v) for v in (p.x, p.y, p.z)):
+            return
+        self.cur_x = p.x
+        self.cur_y = p.y
+        q = msg.pose.pose.orientation
+        sy = 2.0 * (q.w * q.z + q.x * q.y)
+        cy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        self.cur_yaw = math.atan2(sy, cy)
+        if self.last_pos is not None:
+            self.forward_dist += math.hypot(p.x - self.last_pos[0],
+                                            p.y - self.last_pos[1])
+        self.last_pos = (p.x, p.y)
+
+    def tick(self):
+        if self.triggered or not self.auto_active:
+            return
+        if self.auto_mode in (1, 2):
+            res = dash.DashboardNode._control_waypoint(self)
+        else:
+            res = dash.DashboardNode._control_trajectory(self)
+        if res is None or res[0] is None:
+            self.stop_auto_run()
+            return
+        v_des, w_des = res
+        v = dash.slew(self.auto_last_v, v_des, dash.MAX_LIN_ACCEL * DT)
+        w = dash.slew(self.auto_last_w, w_des, dash.MAX_ANG_ACCEL * DT)
+        w = clamp(w, -dash.MAX_ANGULAR_VELOCITY, dash.MAX_ANGULAR_VELOCITY)
+        v = max(0.0, v)
+        self.auto_last_v = v
+        self.auto_last_w = w
+        tw = Twist()
+        tw.linear.x = v
+        tw.angular.z = w
+        self.cmd_pub.publish(tw)
+
+    def trigger(self):
+        if self.triggered:
+            return
+        self.triggered = True
+        self.stop_auto_run()
+        msg = Bool()
+        msg.data = True
+        self.trigger_pub.publish(msg)
+
+
+def nominal_length(mode):
+    if mode in (1, 2):
+        wps = ot.waypoints("recovery_corridor.sdf")
+        return sum(math.hypot(wps[i + 1][0] - wps[i][0],
+                              wps[i + 1][1] - wps[i][1])
+                   for i in range(len(wps) - 1))
+    return ot._SAMPLED[2][-1]
+
+
+def robot_corners(x, y, yaw):
+    c = math.cos(yaw)
+    s = math.sin(yaw)
+    pts = []
+    for sx in (-ROBOT_HW, ROBOT_HW):
+        for sy in (-ROBOT_HD, ROBOT_HD):
+            pts.append((x + sx * c - sy * s, y + sx * s + sy * c))
+    return pts
+
+
+def dist_point_rect(px, py, cx, cy, yaw):
+    c = math.cos(-yaw)
+    s = math.sin(-yaw)
+    dx = px - cx
+    dy = py - cy
+    lx = dx * c - dy * s
+    ly = dx * s + dy * c
+    qx = abs(lx) - ROBOT_HW
+    qy = abs(ly) - ROBOT_HD
+    if qx <= 0.0 and qy <= 0.0:
+        return 0.0
+    if qx <= 0.0:
+        return qy
+    if qy <= 0.0:
+        return qx
+    return math.hypot(qx, qy)
+
+
+def run_mode(mode, timeout=600):
+    tmp = tempfile.mkdtemp(prefix="dream_auto_")
+    world_hd = os.path.join(tmp, "world.sdf")
+    bridge_cfg = os.path.join(tmp, "bridge.yaml")
+    yaml_file = os.path.join(tmp, "path_landmarks.yaml")
+    make_headless_world(world_hd)
+    write_bridge_config(bridge_cfg)
+
+    gz = start(["ign", "gazebo", "-s", "-r", world_hd])
+    time.sleep(8.0)
+    bridge = start(["ros2", "run", "ros_gz_bridge", "parameter_bridge",
+                    "--ros-args", "-p", f"config_file:={bridge_cfg}"])
+    time.sleep(3.0)
+    sanitizer = start(["ros2", "run", "vslam_recovery_core", "odom_sanitizer.py"])
+    recorder = start(["ros2", "run", "vslam_recovery_core", "recovery_recorder_server",
+                      "--ros-args", "-p", f"yaml_file:={yaml_file}",
+                      "-p", "odom_topic:=/odom"])
+    sampler = start(["ros2", "run", "vslam_recovery_core", "dream_sampler_node.py",
+                     "--ros-args", "-p", "odom_topic:=/odom",
+                     "-p", "r2_threshold:=0.98",
+                     "-p", "max_window_size:=5000",
+                     "-p", "max_window_arc:=1.0"])
+    controller = start(["ros2", "run", "vslam_recovery_core", "recovery_controller",
+                        "--ros-args", "-p", f"yaml_file:={yaml_file}",
+                        "-p", "odom_topic:=/odom",
+                        "-p", "cmd_vel_topic:=/cmd_vel",
+                        "-p", "failure_trigger_topic:=/camera_failure_trigger",
+                        "-p", "rotate_angular_velocity:=0.8",
+                        "-p", "drive_frequency:=20.0"])
+    time.sleep(3.0)
+
+    driver = AutoDriver(mode)
+    driver.start_auto_run()
+
+    trigger_dist = 0.9 * nominal_length(mode)
+    min_wall = 1e9
+    min_obst = 1e9
+    coll = None
+    start_t = time.time()
+    t_trigger = None
+
+    try:
+        while time.time() - start_t < timeout:
+            rclpy.spin_once(driver, timeout_sec=0.01)
+            x, y, yaw = driver.cur_x, driver.cur_y, driver.cur_yaw
+            for (cx, cy) in robot_corners(x, y, yaw):
+                min_wall = min(min_wall, WALL_Y - abs(cy))
+            for (ox, oy) in OBSTACLES:
+                min_obst = min(min_obst, dist_point_rect(ox, oy, x, y, yaw) - OBST_R)
+
+            if not driver.triggered and driver.forward_dist >= trigger_dist:
+                driver.trigger()
+                t_trigger = time.time()
+
+            if driver.triggered and t_trigger is not None:
+                if time.time() - t_trigger > 2.0 and math.hypot(x, y) < 0.06:
+                    break
+                if time.time() - t_trigger > 120.0:
+                    break
+
+        time.sleep(0.2)
+        rclpy.spin_once(driver, timeout_sec=0.2)
+        final_x, final_y = driver.cur_x, driver.cur_y
+        final_err = math.hypot(final_x, final_y)
+    finally:
+        driver.stop_auto_run()
+        driver.destroy_node()
+        kill(controller)
+        kill(sampler)
+        kill(recorder)
+        kill(sanitizer)
+        kill(bridge)
+        kill(gz)
+
+    if min_wall < 0.0:
+        coll = "wall"
+    elif min_obst < 0.0:
+        coll = "obstacle"
+    ok = (final_err < PASS_ERROR and coll is None
+          and min_wall >= 0.0 and min_obst >= 0.0)
+    return dict(mode=mode, ok=ok, final_err=final_err, final_x=final_x,
+                final_y=final_y, min_wall=min_wall, min_obst=min_obst,
+                coll=coll)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--mode", type=int, default=0, help="1-4; 0 = all modes")
+    args = ap.parse_args()
+    modes = [args.mode] if args.mode else [1, 2, 3, 4]
+
+    rclpy.init(args=["run_headless_auto_test"])
+    try:
+        print("=" * 78)
+        print("Headless Gazebo auto-mode recovery test "
+              "(camera failure at 90% of forward distance)")
+        print("=" * 78)
+        all_ok = True
+        for m in modes:
+            print(f"--- Auto {m} ---", flush=True)
+            r = run_mode(m)
+            if not r["ok"]:
+                all_ok = False
+            status = "PASS" if r["ok"] else "FAIL"
+            print(f"Mode {m}: {status}  final_err={r['final_err']:.3f} m  "
+                  f"wall={r['min_wall']:.3f} m  obst={r['min_obst']:.3f} m  "
+                  f"coll={r['coll']}", flush=True)
+        print("-" * 78)
+        print("RESULT:", "ALL PASS" if all_ok else "FAILURES PRESENT")
+    finally:
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

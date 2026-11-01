@@ -1,0 +1,28 @@
+NSGAII:
+    GenerationalDistance: 
+        Min: 28.17062205737785
+        Median: 32.058367594641126
+        Max: 36.039090853822
+        Count: 50
+        Indifferent: []
+MOEAD:
+    GenerationalDistance: 
+        Min: 0.0030682918756304903
+        Median: 0.2339087402839091
+        Max: 1.664882249084352
+        Count: 50
+        Indifferent: [NSGAS]
+NSGAIII:
+    GenerationalDistance: 
+        Min: 2.3578639226895524
+        Median: 3.4908487734131235
+        Max: 4.378166847637685
+        Count: 50
+        Indifferent: []
+NSGAS:
+    GenerationalDistance: 
+        Min: 0.05376580534983377
+        Median: 0.2468510830310625
+        Max: 6.8877741019458005
+        Count: 50
+        Indifferent: [MOEAD]

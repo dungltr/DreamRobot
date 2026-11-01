@@ -1,0 +1,9 @@
+# Service request (Figure 9 B in the paper)
+# theta     : monitored yaw angle value (rad) at the sampling instant
+# frequency : sampling frequency (Hz) used at the sampling instant (f = 1/T)
+float64 theta
+float64 frequency
+---
+# Service response
+# ret : true when the path landmark was successfully recorded
+bool ret

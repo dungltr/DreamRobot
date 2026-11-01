@@ -1,0 +1,14 @@
+# ExecuteRecovery action (Figure 9 A in the paper)
+
+# Goal definition
+float64 linear_x       # linear velocity to publish (m/s)
+float64 angular_z      # angular velocity to publish (rad/s)
+float64 duration       # sampled time period the velocity combination is held (s)
+float64 cmd_distance   # commanded distance between consecutive landmarks (m)
+float64 yaw_angle      # recorded yaw angle of the landmark (rad)
+---
+# Result definition
+float64 distance       # distance travelled while executing the goal (m)
+---
+# Feedback definition
+std_msgs/String fbk_msg  # human readable progress message

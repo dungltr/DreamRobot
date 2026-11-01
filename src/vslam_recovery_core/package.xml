@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>vslam_recovery_core</name>
+  <version>0.1.0</version>
+  <description>
+    Blind navigation recovery layer for vSLAM camera failure:
+    path landmark recording (service), adaptive Shannon-Nyquist sampling
+    (service client) and sampled time-based back-travel motion control
+    (action server).
+  </description>
+  <maintainer email="codewhale@example.com">Codewhale Robotics</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>recovery_interfaces</depend>
+  <depend>yaml-cpp</depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>ros_gz_sim</exec_depend>
+
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <gazebo_ros gazebo_model_path="${prefix}/worlds"/>
+    <gazebo_ros gazebo_model_path="${prefix}/urdf"/>
+  </export>
+</package>

@@ -1,0 +1,28 @@
+NSGAII:
+    InvertedGenerationalDistance: 
+        Min: 244.386796275276
+        Median: 673.5195272045253
+        Max: 989.1593377870392
+        Count: 50
+        Indifferent: []
+MOEAD:
+    InvertedGenerationalDistance: 
+        Min: 10.735600692302937
+        Median: 41.780214921881495
+        Max: 71.98335083137334
+        Count: 50
+        Indifferent: []
+NSGAIII:
+    InvertedGenerationalDistance: 
+        Min: 51.78567533061295
+        Median: 104.57176060530952
+        Max: 149.59539737885646
+        Count: 50
+        Indifferent: []
+NSGAS:
+    InvertedGenerationalDistance: 
+        Min: 16.93143162793714
+        Median: 31.00408018316412
+        Max: 76.54601736832036
+        Count: 50
+        Indifferent: []

@@ -1,0 +1,28 @@
+NSGAII:
+    MaximumParetoFrontError: 
+        Min: 1961.6523133016678
+        Median: 2166.5467167658917
+        Max: 2333.5093900786114
+        Count: 50
+        Indifferent: []
+MOEAD:
+    MaximumParetoFrontError: 
+        Min: 78.19539449722414
+        Median: 205.77045426770553
+        Max: 542.151669563411
+        Count: 50
+        Indifferent: []
+NSGAIII:
+    MaximumParetoFrontError: 
+        Min: 683.3655617220361
+        Median: 888.30594473757
+        Max: 1206.7450130957031
+        Count: 50
+        Indifferent: []
+NSGAS:
+    MaximumParetoFrontError: 
+        Min: 51.349192116834324
+        Median: 86.85372046522467
+        Max: 307.0075852997217
+        Count: 50
+        Indifferent: []
