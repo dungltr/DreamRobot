@@ -303,6 +303,7 @@ Nếu bạn thấy:
 - `test_auto_recovery_sim.py` — kiểm tra nhanh (offline).
 - `run_headless_auto_test.py` — kiểm tra đầy đủ Gazebo headless.
 - `run_gazebo_benchmark.py`, `sweep_r2_threshold.py`, `benchmark_baselines_gazebo.py` — sinh các bảng benchmark.
+- `benchmark_footprint.py` — đo thời gian CPU và bộ nhớ mỗi lần cập nhật DREAM.
 - `bench_data/odom_A/B/C.csv` — dữ liệu odometry Gazebo đã ghi.
 - `publish/DREAM-ROS2-IEEE.tex` — bản thảo bài báo IEEE Access.
 - `publish/DREAM-ROS2-IEEE.pdf` — bản PDF đã biên dịch.

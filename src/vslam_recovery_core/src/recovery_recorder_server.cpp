@@ -1,6 +1,6 @@
 // recovery_recorder_server.cpp
 //
-// ROS 2 Service Server for the RecordLandmark service (Figure 9 B).
+// ROS 2 Service Server for the RecordLandmark service.
 //
 // It subscribes to /odom (nav_msgs/msg/Odometry), converts the pose
 // quaternion to the Euler yaw angle and, upon receiving a service request,

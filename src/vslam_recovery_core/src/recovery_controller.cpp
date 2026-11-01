@@ -1,6 +1,6 @@
 // recovery_controller.cpp
 //
-// ExecuteRecovery action server (Figure 9 A) and blind navigation trigger.
+// ExecuteRecovery action server and blind navigation trigger.
 //
 // The node listens to /camera_failure_trigger (std_msgs/msg/Bool). When the
 // trigger becomes true it executes the blind navigation recovery sequence:

@@ -1,7 +1,7 @@
 // landmark_sampler_client.cpp
 //
 // Adaptive Shannon-Nyquist path landmark sampler (service client side of the
-// architecture shown in Figure 4).
+// recovery-layer architecture).
 //
 // It subscribes to /odom and tracks the last four consecutive yaw angles. The
 // segment type (straight / curved) is decided with the paper's rule:

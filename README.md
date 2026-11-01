@@ -313,6 +313,7 @@ If you see:
 - `test_auto_recovery_sim.py` — quick check (offline).
 - `run_headless_auto_test.py` — full headless Gazebo check.
 - `run_gazebo_benchmark.py`, `sweep_r2_threshold.py`, `benchmark_baselines_gazebo.py` — generate the benchmark tables.
+- `benchmark_footprint.py` — measures the DREAM per-update CPU time and memory.
 - `bench_data/odom_A/B/C.csv` — recorded Gazebo odometry data.
 - `publish/DREAM-ROS2-IEEE.tex` — the IEEE Access paper draft.
 - `publish/DREAM-ROS2-IEEE.pdf` — the compiled PDF.

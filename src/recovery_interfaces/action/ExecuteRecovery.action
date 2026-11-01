@@ -1,4 +1,4 @@
-# ExecuteRecovery action (Figure 9 A in the paper)
+# ExecuteRecovery action
 
 # Goal definition
 float64 linear_x       # linear velocity to publish (m/s)
