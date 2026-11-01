@@ -10,7 +10,7 @@ position, first-derivative (slope) and second-derivative (curvature)
 continuity at the knots. Zero slope and zero curvature are imposed at every
 knot, which yields a smooth S-curve with no velocity or acceleration
 discontinuity - the practical "zero jerk" reference used throughout the
-paper's Figure 13.
+corridor demonstration (manuscript Fig. 9).
 
 Clearance geometry (obstacle centre -> path apex, |dy| = 0.55 m):
 
@@ -47,7 +47,7 @@ OBSTACLES = [
     (3.0, -0.3),
 ]
 
-# Adaptive pure-pursuit lookahead (Section 5.1 / Figure 13).
+# Adaptive pure-pursuit lookahead (manuscript Fig. 9).
 LOOKAHEAD_CURVE = 0.45           # m, inside the S-curve
 LOOKAHEAD_STRAIGHT = 0.8         # m, on the straight exit
 CURVE_END_X = 4.0                # x >= this value is treated as straight

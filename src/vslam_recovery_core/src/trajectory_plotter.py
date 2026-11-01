@@ -3,13 +3,13 @@
 trajectory_plotter.py
 
 Offline plotter that reads the recorded path landmarks (path_landmarks.yaml)
-and exports high-resolution figures in the style of the paper's Figures 11, 12
-and 13:
+and exports high-resolution figures analogous to the manuscript's
+heading-reconstruction (Fig. 3) and return-path (Fig. 8) plots:
 
   * trajectory_2d_<timestamp>.png / .pdf  -> robot path (x, y), reconstructed
       from the recorded distance (d) and yaw (psi) between landmarks;
   * velocity_yaw_<timestamp>.png / .pdf   -> recorded angular velocity (w) and
-      yaw angle (psi) versus landmark index (Figure 11 style).
+      yaw angle (psi) versus landmark index (cf. manuscript Fig. 3).
 
 Design notes:
   * the Figure/ directory is created automatically if missing (mkdir -p);
@@ -118,7 +118,7 @@ def main():
     psi_values = [lm['psi'] for lm in landmarks]
     xs, ys = reconstruct_trajectory(landmarks)
 
-    # Figure 12/13 style: 2D trajectory.
+    # Return-path style (cf. manuscript Fig. 8): 2D trajectory.
     fig1, ax1 = plt.subplots(figsize=(7, 5))
     ax1.plot(xs, ys, 'b-', linewidth=1.2)
     ax1.plot(xs[0], ys[0], 'go', label='Start')
@@ -130,7 +130,7 @@ def main():
     ax1.grid(True, alpha=0.3)
     ax1.axis('equal')
 
-    # Figure 11 style: angular velocity and yaw angle.
+    # Heading style (cf. manuscript Fig. 3): angular velocity and yaw angle.
     fig2, (ax_w, ax_psi) = plt.subplots(2, 1, figsize=(7, 6), sharex=True)
     ax_w.plot(indices, w_values, 'b-', linewidth=1.2)
     ax_w.set_ylabel('w [rad/s]')

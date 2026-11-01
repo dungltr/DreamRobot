@@ -10,7 +10,7 @@ Real-time telemetry (from /odom):
   * current path segment (straight 0.5 Hz / curved 1.0 Hz),
   * forward distance D and recovery distance CD.
 
-Real-time plots (Figure 11 / 13 style, updated at ~20 Hz):
+Real-time diagnostic plots (updated at ~20 Hz):
   * yaw angle variation vs time,
   * recorded angular velocity w and linear velocity v vs time, with the
     sampling-frequency transition regions (0.5 Hz straight / 1.0 Hz curved)
@@ -568,7 +568,7 @@ class DashboardApp:
 
         # ---- [5] Real-time plots (bottom of the window) ------------------- #
         plot_frame = tk.LabelFrame(self.scrollable_frame,
-                                   text='Real-time plots (Figure 11 / 13)')
+                                   text='Real-time plots')
         plot_frame.pack(fill='both', expand=True, padx=10, pady=(4, 10))
 
         self.fig = Figure(figsize=(6.6, 3.6), dpi=100)

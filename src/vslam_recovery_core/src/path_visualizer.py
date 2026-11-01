@@ -4,7 +4,7 @@ path_visualizer.py
 
 ROS 2 node that reads /odom and publishes two nav_msgs/msg/Path streams for
 RViz 2, so the forward and recovery trajectories can be compared side by side
-(as in Figures 12 and 13 of the paper):
+(cf. manuscript Fig. 11, the RViz view):
 
   * /trajectory/forward_path  (green)  - normal forward motion
   * /trajectory/recovery_path (red)    - back travel after vision failure
