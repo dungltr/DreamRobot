@@ -154,6 +154,11 @@ The `bench_data/` folder contains **real odometry data** recorded from Gazebo fo
 worlds: `odom_A.csv` (straight corridor), `odom_B.csv` (slalom), `odom_C.csv`
 (S-shaped). The commands below **recompute the tables in the paper** from that data.
 
+> To **re-record** the odometry yourself (instead of recomputing from the saved CSVs),
+> the sensor-enabled worlds need a virtual display:
+> `xvfb-run -a python3 run_gazebo_benchmark.py`. The offline commands below
+> (`--compare`, `--mc`, `--ablate`) need no display.
+
 #### 2.3.1 DR / recovery-error table (main table)
 
 ```bash

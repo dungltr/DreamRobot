@@ -24,6 +24,14 @@ Usage:
   source /opt/ros/humble/setup.bash && source install/setup.bash
   python3 run_gazebo_benchmark.py            # record + compare all 3 worlds
   python3 run_gazebo_benchmark.py --compare  # offline compare on recorded CSVs
+
+Note: the recording mode starts Gazebo with the sensor-enabled worlds (the
+camera sensor forces OGRE rendering), so it needs a virtual display when no
+physical display is available, e.g.::
+
+    xvfb-run -a python3 run_gazebo_benchmark.py
+
+The --compare / --mc / --ablate modes are offline and need no display.
 """
 
 import argparse

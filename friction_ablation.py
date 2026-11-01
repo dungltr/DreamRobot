@@ -12,6 +12,12 @@ does not degrade the closed-loop return error.
 Usage:
   source /opt/ros/humble/setup.bash && source install/setup.bash
   python3 friction_ablation.py
+
+Note: recording needs a virtual display (the worlds carry a camera sensor,
+which forces OGRE rendering), so run it under Xvfb when no physical display is
+available:
+
+    xvfb-run -a python3 friction_ablation.py
 """
 
 import csv
