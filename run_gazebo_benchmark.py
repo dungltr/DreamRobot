@@ -77,18 +77,28 @@ def _start_proc(cmd):
 
 
 def _kill(proc):
-    if proc is None or proc.poll() is not None:
+    """Terminate a launched process and its whole process group.
+
+    Processes are started with start_new_session=True, so proc.pid is the
+    group leader. Always escalate to SIGKILL -- even when the wrapper has
+    already exited -- so the ``ros2 run`` child node cannot be orphaned and
+    pollute the next run with stale /odom or /cmd_vel traffic.
+    """
+    if proc is None:
         return
     try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGINT)
+        pgid = os.getpgid(proc.pid)
+    except (ProcessLookupError, PermissionError, OSError):
+        pgid = proc.pid
+    try:
+        os.killpg(pgid, signal.SIGINT)
     except (ProcessLookupError, PermissionError, OSError):
         pass
     time.sleep(0.5)
-    if proc.poll() is None:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError, OSError):
-            pass
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
     try:
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
@@ -124,7 +134,12 @@ def record_world(world, name, segments, node):
             print(f"  [{name}] WARNING: no odometry recorded")
         return odom
     finally:
-        node.publish_cmd_vel(0.0, 0.0)
+        # publish_cmd_vel can raise (e.g. RCLError when the ROS context was
+        # already shut down); never let that skip the process cleanup below.
+        try:
+            node.publish_cmd_vel(0.0, 0.0)
+        except Exception:
+            pass
         _kill(bridge)
         _kill(gz)
         time.sleep(SHUTDOWN_WAIT)

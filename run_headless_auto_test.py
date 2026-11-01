@@ -98,18 +98,30 @@ def start(cmd):
 
 
 def kill(proc):
-    if proc is None or proc.poll() is not None:
+    """Terminate a launched process and its whole process group.
+
+    Processes are started with start_new_session=True, so proc.pid is the
+    group leader. The ``ros2 run`` wrapper spawns the actual node as a child
+    in the same group; we signal the GROUP (not just the wrapper) and always
+    escalate to SIGKILL -- even when the wrapper has already exited -- so the
+    child node cannot be orphaned. An orphaned node would keep publishing to
+    /odom, /cmd_vel, etc. and pollute the next run.
+    """
+    if proc is None:
         return
     try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGINT)
+        pgid = os.getpgid(proc.pid)
+    except (ProcessLookupError, PermissionError, OSError):
+        pgid = proc.pid
+    try:
+        os.killpg(pgid, signal.SIGINT)
     except (ProcessLookupError, PermissionError, OSError):
         pass
     time.sleep(0.5)
-    if proc.poll() is None:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError, OSError):
-            pass
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
     try:
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
@@ -306,8 +318,16 @@ def run_mode(mode, timeout=600):
         final_x, final_y = driver.cur_x, driver.cur_y
         final_err = math.hypot(final_x, final_y)
     finally:
-        driver.stop_auto_run()
-        driver.destroy_node()
+        # These can raise (e.g. RCLError when the context was already shut
+        # down by an interrupted run); never let that skip the cleanup below.
+        try:
+            driver.stop_auto_run()
+        except Exception:
+            pass
+        try:
+            driver.destroy_node()
+        except Exception:
+            pass
         kill(controller)
         kill(sampler)
         kill(recorder)
@@ -351,7 +371,12 @@ def main():
         print("-" * 78)
         print("RESULT:", "ALL PASS" if all_ok else "FAILURES PRESENT")
     finally:
-        rclpy.shutdown()
+        # An interrupted run (SIGINT/SIGTERM) may have already shut the
+        # context down via rclpy's signal handler; guard the duplicate call.
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
