@@ -33,14 +33,14 @@ DREAM blind-recovery demo
 How to monitor (match the paper):
   1. Gazebo     — watch the robot drive the corridor.
   2. RViz       — green = forward path, red = recovery path.
-  3. Dashboard  — 'Số mốc đường đã ghi' = landmarks recorded by DREAM.
+  3. Dashboard  — 'Path landmarks recorded' = landmarks recorded by DREAM.
 
 To run the experiment:
   1. In the Dashboard press "Auto 4" (continuous curve following).
   2. Watch the landmark count grow (sparse on straights, dense at turns).
-  3. Press "CẮT TÍN HIỆU CAMERA (Trigger Failure)" -> the robot turns pi and
+  3. Press "CUT CAMERA SIGNAL (Trigger Failure)" -> the robot turns pi and
      replays the recorded path in reverse.
-  4. Press "Tính sai số vị trí (PE %)" to read the return position error.
+  4. Press "Compute Position Error (PE %)" to read the return position error.
 =====================================================================
 EOF
 

@@ -32,8 +32,8 @@ obstacles are avoided with 0.55 m centre clearance.
 
 Other controls:
   * manual teleop (buttons + arrow keys + Stop) and speed sliders;
-  * "CẮT TÍN HIỆU CAMERA (Trigger Failure)" -> /camera_failure_trigger;
-  * "Tính sai số vị trí (PE %)" -> RM and PE (equation 4 / Tables IV/VI).
+  * "CUT CAMERA SIGNAL (Trigger Failure)" -> /camera_failure_trigger;
+  * "Compute Position Error (PE %)" -> RM and PE (Equation 2).
 """
 
 import math
@@ -477,93 +477,93 @@ class DashboardApp:
                          font=('TkDefaultFont', 15, 'bold'))
         title.pack(fill='x', padx=10, pady=(8, 2))
 
-        tele = tk.LabelFrame(self.scrollable_frame, text='Thông số giám sát')
+        tele = tk.LabelFrame(self.scrollable_frame, text='Telemetry')
         tele.pack(fill='x', padx=10, pady=4)
 
-        self.lbl_vel = tk.Label(tele, text='Tốc độ: v = 0.000 m/s, w = 0.000 rad/s',
+        self.lbl_vel = tk.Label(tele, text='Velocity: v = 0.000 m/s, w = 0.000 rad/s',
                                 font=('TkDefaultFont', 12, 'bold'))
         self.lbl_vel.pack(anchor='w', **pad)
 
-        self.lbl_pose = tk.Label(tele, text='Vị trí: x = 0.000 m, y = 0.000 m',
+        self.lbl_pose = tk.Label(tele, text='Position: x = 0.000 m, y = 0.000 m',
                                  font=('TkDefaultFont', 11))
         self.lbl_pose.pack(anchor='w', **pad)
 
-        self.lbl_seg = tk.Label(tele, text='Phân đoạn: Đoạn thẳng (0.5 Hz)',
+        self.lbl_seg = tk.Label(tele, text='Segment: Straight (0.5 Hz)',
                                 font=('TkDefaultFont', 11))
         self.lbl_seg.pack(anchor='w', **pad)
 
-        self.lbl_lm = tk.Label(tele, text='Số mốc đường đã ghi: 0',
+        self.lbl_lm = tk.Label(tele, text='Path landmarks recorded: 0',
                                font=('TkDefaultFont', 11))
         self.lbl_lm.pack(anchor='w', **pad)
 
-        self.lbl_dist = tk.Label(tele, text='Quãng đường: D = 0.000 m, CD = 0.000 m',
+        self.lbl_dist = tk.Label(tele, text='Distance: D = 0.000 m, CD = 0.000 m',
                                  font=('TkDefaultFont', 11))
         self.lbl_dist.pack(anchor='w', **pad)
 
-        self.lbl_err = tk.Label(tele, text='Sai số: chưa đo',
+        self.lbl_err = tk.Label(tele, text='Error: not measured yet',
                                 font=('TkDefaultFont', 11))
         self.lbl_err.pack(anchor='w', **pad)
 
         # ---- [2] Auto-run modes + emergency stop -------------------------- #
-        modes = tk.LabelFrame(self.scrollable_frame, text='4 Chế độ tự hành')
+        modes = tk.LabelFrame(self.scrollable_frame, text='4 Autonomous Modes')
         modes.pack(fill='x', padx=10, pady=4)
 
-        tk.Button(modes, text='Auto 1: Thẳng + Xoay (tốc độ cố định v=0.08 m/s)',
+        tk.Button(modes, text='Auto 1: Straight + Turn (fixed speed v=0.08 m/s)',
                   command=lambda: self.node.start_auto_run(1),
                   height=1).pack(fill='x', pady=2)
-        tk.Button(modes, text='Auto 2: Thẳng + Xoay (tốc độ linh hoạt 0.05/0.15 m/s)',
+        tk.Button(modes, text='Auto 2: Straight + Turn (adaptive speed 0.05/0.15 m/s)',
                   command=lambda: self.node.start_auto_run(2),
                   height=1).pack(fill='x', pady=2)
-        tk.Button(modes, text='Auto 3: Cong liên tục (LSV=0.086 / ASV=0.097)',
+        tk.Button(modes, text='Auto 3: Continuous curve (LSV=0.086 / ASV=0.097)',
                   command=lambda: self.node.start_auto_run(3),
                   height=1).pack(fill='x', pady=2)
-        tk.Button(modes, text='Auto 4: Cong liên tục (profile 0.04-0.086-0.20 m/s)',
+        tk.Button(modes, text='Auto 4: Continuous curve (profile 0.04-0.086-0.20 m/s)',
                   command=lambda: self.node.start_auto_run(4),
                   height=1).pack(fill='x', pady=2)
 
-        tk.Button(modes, text='■ DỪNG KHẨN CẤP', command=self.node.emergency_stop,
+        tk.Button(modes, text='■ EMERGENCY STOP', command=self.node.emergency_stop,
                   height=2, bg='#c62828', fg='white',
                   font=('TkDefaultFont', 12, 'bold')).pack(fill='x', pady=(4, 2))
 
         # ---- [3] Manual teleop -------------------------------------------- #
-        teleop = tk.LabelFrame(self.scrollable_frame, text='Điều khiển thủ công (Manual Teleop)')
+        teleop = tk.LabelFrame(self.scrollable_frame, text='Manual Teleop')
         teleop.pack(fill='x', padx=10, pady=4)
 
         grid = tk.Frame(teleop)
         grid.pack(pady=4)
 
-        tk.Button(grid, text='▲ Tiến', width=10, height=2,
+        tk.Button(grid, text='▲ Forward', width=10, height=2,
                   command=lambda: self._teleop(+1, 0)).grid(row=0, column=1, padx=4, pady=2)
-        tk.Button(grid, text='◀ Trái', width=10, height=2,
+        tk.Button(grid, text='◀ Left', width=10, height=2,
                   command=lambda: self._teleop(0, +1)).grid(row=1, column=0, padx=4, pady=2)
-        tk.Button(grid, text='■ Dừng', width=10, height=2, bg='#fdd835',
+        tk.Button(grid, text='■ Stop', width=10, height=2, bg='#fdd835',
                   command=self.node.manual_stop).grid(row=1, column=1, padx=4, pady=2)
-        tk.Button(grid, text='▶ Phải', width=10, height=2,
+        tk.Button(grid, text='▶ Right', width=10, height=2,
                   command=lambda: self._teleop(0, -1)).grid(row=1, column=2, padx=4, pady=2)
-        tk.Button(grid, text='▼ Lùi', width=10, height=2,
+        tk.Button(grid, text='▼ Backward', width=10, height=2,
                   command=lambda: self._teleop(-1, 0)).grid(row=2, column=1, padx=4, pady=2)
 
-        tk.Label(teleop, text='Phím: ↑↓←→ di chuyển, Space dừng',
+        tk.Label(teleop, text='Keys: ↑↓←→ move, Space stop',
                  fg='#555555').pack(pady=(0, 2))
 
         # Speed slider (single control for manual + auto speed ceiling).
         self.speed_scale = tk.Scale(
             teleop, from_=0.05, to=0.25, resolution=0.01,
-            orient='horizontal', label='Tốc độ chạy tay (m/s)',
+            orient='horizontal', label='Manual speed (m/s)',
             length=480)
         self.speed_scale.set(0.12)
         self.speed_scale.pack(anchor='w', **pad)
 
         # ---- [4] Failure simulation --------------------------------------- #
-        actions = tk.LabelFrame(self.scrollable_frame, text='Mô phỏng sự cố')
+        actions = tk.LabelFrame(self.scrollable_frame, text='Failure Simulation')
         actions.pack(fill='x', padx=10, pady=4)
 
-        tk.Button(actions, text='CẮT TÍN HIỆU CAMERA (Trigger Failure)',
+        tk.Button(actions, text='CUT CAMERA SIGNAL (Trigger Failure)',
                   command=self.node.trigger_failure, height=2,
                   bg='#c62828', fg='white',
                   font=('TkDefaultFont', 12, 'bold')).pack(fill='x', pady=3)
 
-        tk.Button(actions, text='Tính sai số vị trí (PE %)',
+        tk.Button(actions, text='Compute Position Error (PE %)',
                   command=self.on_calculate_error, height=1).pack(fill='x', pady=3)
 
         # ---- [5] Real-time plots (bottom of the window) ------------------- #
@@ -634,15 +634,15 @@ class DashboardApp:
     def on_calculate_error(self):
         result = self.node.compute_error()
         if result is None:
-            messagebox.showinfo('Position error', 'Chưa có dữ liệu quãng đường đi tới (D).')
+            messagebox.showinfo('Position error', 'No forward distance (D) data yet.')
             return
         d_forward, d_recovery, pe, rm = result
-        text = (f'D (đi tới)   = {d_forward:.3f} m\n'
-                f'CD (quay lui) = {d_recovery:.3f} m\n'
-                f'RM (còn lại)  = {rm:.3f} m\n'
-                f'PE (sai số %) = {pe:.3f} %')
-        self.lbl_err.config(text=f'Sai số: PE = {pe:.3f} %, RM = {rm:.3f} m')
-        messagebox.showinfo('Sai số vị trí (Công thức 4 / Bảng IV)', text)
+        text = (f'D (forward)    = {d_forward:.3f} m\n'
+                f'CD (return)    = {d_recovery:.3f} m\n'
+                f'RM (remaining) = {rm:.3f} m\n'
+                f'PE (error %)   = {pe:.3f} %')
+        self.lbl_err.config(text=f'Error: PE = {pe:.3f} %, RM = {rm:.3f} m')
+        messagebox.showinfo('Position Error (Equation 2)', text)
 
     def on_close(self):
         self.node.stop_auto_run()
@@ -705,15 +705,15 @@ class DashboardApp:
             self._last_yaml_read = now
 
         seg = self.node.segment_state()
-        seg_text = ('Đoạn cong (1.0 Hz)' if seg == 'curved' else 'Đoạn thẳng (0.5 Hz)')
+        seg_text = ('Curved (1.0 Hz)' if seg == 'curved' else 'Straight (0.5 Hz)')
         self.lbl_vel.config(
-            text=f'Tốc độ: v = {self.node.v:.3f} m/s, w = {self.node.w:.3f} rad/s')
+            text=f'Velocity: v = {self.node.v:.3f} m/s, w = {self.node.w:.3f} rad/s')
         self.lbl_pose.config(
-            text=f'Vị trí: x = {self.node.cur_x:.3f} m, y = {self.node.cur_y:.3f} m')
-        self.lbl_seg.config(text=f'Phân đoạn: {seg_text}')
-        self.lbl_lm.config(text=f'Số mốc đường đã ghi: {self._landmarks}')
+            text=f'Position: x = {self.node.cur_x:.3f} m, y = {self.node.cur_y:.3f} m')
+        self.lbl_seg.config(text=f'Segment: {seg_text}')
+        self.lbl_lm.config(text=f'Path landmarks recorded: {self._landmarks}')
         self.lbl_dist.config(
-            text=f'Quãng đường: D = {self.node.forward_dist:.3f} m, '
+            text=f'Distance: D = {self.node.forward_dist:.3f} m, '
                  f'CD = {self.node.recovery_dist:.3f} m')
 
         # Append a sample (~20 Hz) and refresh the plots.
@@ -740,7 +740,7 @@ class DashboardApp:
                 if result is not None:
                     _, _, pe, rm = result
                     self.lbl_err.config(
-                        text=f'Sai số: PE = {pe:.3f} %, RM = {rm:.3f} m')
+                        text=f'Error: PE = {pe:.3f} %, RM = {rm:.3f} m')
                     self.node.get_logger().info(
                         f'Auto position error: PE={pe:.3f}% RM={rm:.3f}m')
         else:
