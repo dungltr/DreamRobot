@@ -146,6 +146,11 @@ Thư mục `bench_data/` chứa **dữ liệu odometry thật** đã ghi từ Ga
 `odom_A.csv` (hành lang thẳng), `odom_B.csv` (slalom), `odom_C.csv` (chữ S).
 Các lệnh dưới đây **tính lại các bảng trong bài báo** từ chính dữ liệu đó.
 
+> Muốn **tự ghi lại** odometry (thay vì chỉ tính lại từ các CSV đã lưu), các thế giới có
+> sensor camera cần màn hình ảo:
+> `xvfb-run -a python3 run_gazebo_benchmark.py`. Các lệnh offline bên dưới
+> (`--compare`, `--mc`, `--ablate`) không cần màn hình.
+
 #### 2.3.1 Bảng DR / sai số quay về (bảng chính)
 
 ```bash
