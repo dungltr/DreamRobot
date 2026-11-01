@@ -4,15 +4,17 @@
 //
 // It subscribes to /odom (nav_msgs/msg/Odometry), converts the pose
 // quaternion to the Euler yaw angle and, upon receiving a service request,
-// extracts the five lightweight path variables M = {v, w, d, T, psi}
-// (equation 2 in the paper) and appends them to a human readable YAML file
-// (path_landmarks.yaml) using yaml-cpp.
+// extracts the lightweight path variables M = {v, w, d, T, psi, x, y}
+// (the landmark tuple of the manuscript) and appends them to a human readable
+// YAML file (path_landmarks.yaml) using yaml-cpp.
 //
 //   v   <- odom linear velocity (twist.twist.linear.x)
 //   w   <- odom angular velocity (twist.twist.angular.z)
 //   d   <- Euclidean distance to the previously recorded landmark
-//   T   <- sampling period = 1 / request->frequency  (equation 3)
+//   T   <- sampling period = 1 / request->frequency
 //   psi <- request->theta (monitored yaw angle)
+//   x   <- recorded position x
+//   y   <- recorded position y
 
 #include <cmath>
 #include <fstream>

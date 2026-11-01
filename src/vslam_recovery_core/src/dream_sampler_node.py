@@ -10,18 +10,18 @@ This node is the DREAM counterpart of the fixed-rate Shannon-Nyquist sampler
 (0.5 Hz straight / 1.0 Hz curved) from a yaw-difference heuristic, it drives
 the recording decision from the goodness-of-fit of local linear models.
 
-Algorithm (per DREAMROS2.md / IoTPaper.md):
+Algorithm (per dream_core.py):
 
-  1. Buffer the odometry stream (t, psi, s) where psi is the unwrapped heading
-     and s the cumulative travelled distance.
-  2. Fit ordinary-least-squares linear models psi(t) and s(t) over a sliding
-     window and evaluate their coefficients of determination R^2.
-  3. Linear regime  (R^2 >= R^2_th): steady straight-line or uniform motion ->
+  1. Buffer the odometry stream (t, x, y, s) where (x, y) is the recorded
+     position and s the cumulative travelled distance.
+  2. Over a growing window, evaluate the path linearity (the principal-axis
+     fraction of the (x, y) covariance) and the speed linearity (the R^2 of
+     s(t)); the combined goodness is G = min(path linearity, speed R^2).
+  3. Linear regime  (G >= R^2_th): steady straight-line or uniform motion ->
      no landmark is logged (middleware/storage suppressed).
-  4. Transition event (R^2 <  R^2_th): heading divergence, an
-     obstacle-avoidance turn, or a speed change -> flush the boundary landmark
-     M = {v, w, d, T, psi} through the existing RecordLandmark service and
-     start a fresh regression window.
+  4. Transition event (G <  R^2_th): a turn or a speed change -> flush the
+     boundary landmark M = {v, w, d, T, psi, x, y} through the existing
+     RecordLandmark service and start a fresh window.
 
 The result is an adaptive sampling-rate controller: sparse landmarks on
 straight, steady segments and dense landmarks only where the trajectory
