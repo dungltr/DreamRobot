@@ -70,7 +70,7 @@ class OdomSanitizer(Node):
         self.yaw = 0.0
         self.last_stamp = None
 
-        # Optional sensor-noise injection (DREAMROS2.md 2.3, item 1). Defaults
+        # Optional sensor-noise injection. Defaults
         # are 0.0 so the node stays transparent unless explicitly configured:
         #   sigma_v       : Gaussian std of the linear-velocity feedback (m/s);
         #   sigma_w       : Gaussian std of the angular-velocity feedback (rad/s);

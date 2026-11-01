@@ -2,8 +2,7 @@
 """
 run_gazebo_benchmark.py
 
-End-to-end DREAM benchmark on Gazebo Fortress for the three worlds defined in
-DREAMROS2.md Section 2.3:
+End-to-end DREAM benchmark on Gazebo Fortress for the three benchmark worlds:
 
   * World A (world_a_straight.sdf) : 15 m straight hallway   (max compression)
   * World B (world_b_slalom.sdf)   : 15 m, 4 obstacles slalom

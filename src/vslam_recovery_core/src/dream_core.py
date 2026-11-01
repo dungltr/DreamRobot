@@ -5,7 +5,7 @@ Pure-Python core of the DREAM event-triggered odometry sampler. This module has
 no ROS dependency so the same decision logic can be exercised offline (unit
 tests / Monte-Carlo benchmarks) and inside the live ROS 2 node.
 
-DREAM decision rule (see DREAMROS2.md / IoTPaper.md):
+DREAM decision rule:
 
   * a growing window of samples (t, x, y, s) is kept, where
       t : window-local time (s),

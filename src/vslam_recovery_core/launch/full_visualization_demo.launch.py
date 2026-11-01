@@ -68,7 +68,7 @@ def generate_launch_description():
     regress_speed = LaunchConfiguration('regress_speed')
     min_event_spacing = LaunchConfiguration('min_event_spacing')
 
-    # Sensor-noise injection (odom_sanitizer, DREAMROS2.md 2.3 item 1).
+    # Sensor-noise injection (odom_sanitizer).
     sigma_v = LaunchConfiguration('sigma_v')
     sigma_w = LaunchConfiguration('sigma_w')
     yaw_bias_rate = LaunchConfiguration('yaw_bias_rate')

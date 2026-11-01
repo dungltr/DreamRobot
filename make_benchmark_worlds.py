@@ -2,7 +2,7 @@
 """
 make_benchmark_worlds.py
 
-Generate the three DREAM benchmark worlds (DREAMROS2.md, Section 2.3) from the
+Generate the three DREAM benchmark worlds from the
 base recovery_corridor.sdf template:
 
   * world_a_straight.sdf : 15 m straight hallway, NO obstacles (pure linear
@@ -87,7 +87,7 @@ def add_wheel_friction(sdf, mu=0.7, mu2=0.5):
     """Add contact friction (wheel-ground slippage) to the two drive wheels.
 
     Lower mu/mu2 -> more slip during turns/pivots, which makes the wheel
-    odometry drift from the ground-truth pose (DREAMROS2.md 2.3, item 2).
+    odometry drift from the ground-truth pose.
     """
     friction = (f"<collision name=\"collision\">\n"
                 f"          <geometry><sphere><radius>0.05</radius></sphere></geometry>\n"
@@ -106,7 +106,7 @@ def add_wheel_friction(sdf, mu=0.7, mu2=0.5):
 def add_imu_noise(sdf, sigma_w=0.01, sigma_a=0.05):
     """Add Gaussian noise to the IMU angular velocity / linear acceleration.
 
-    This models the DREAMROS2.md 2.3 item 1 sensor noise at the sensor level
+    This models the sensor noise at the sensor level
     (the recovery odometry is still wheel-encoder based; see odom_sanitizer.py
     for the velocity-feedback noise injection).
     """

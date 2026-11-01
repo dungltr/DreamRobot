@@ -382,7 +382,7 @@ def _replay_path_closed_loop(recon, landmarks_idx):
 
 
 # ---------------------------------------------------------------------------
-# Fig. 8 — forward path vs DREAM reverse-replay path (RobotPaper Fig. 12/13)
+# Fig. 8 — forward path vs DREAM reverse-replay path (cf. Figs. 12--13 in [mulubika2025])
 # ---------------------------------------------------------------------------
 def fig_return_path():
     recon = _load_recon("C")

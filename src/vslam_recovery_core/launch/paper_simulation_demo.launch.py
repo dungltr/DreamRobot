@@ -65,7 +65,7 @@ def generate_launch_description():
     # Auto-start the dashboard's trajectory following (no button press).
     auto_run = LaunchConfiguration('auto_run')
 
-    # Sensor-noise injection (odom_sanitizer, DREAMROS2.md 2.3 item 1).
+    # Sensor-noise injection (odom_sanitizer).
     sigma_v = LaunchConfiguration('sigma_v')
     sigma_w = LaunchConfiguration('sigma_w')
     yaw_bias_rate = LaunchConfiguration('yaw_bias_rate')
