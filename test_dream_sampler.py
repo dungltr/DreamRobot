@@ -214,7 +214,7 @@ def run_scenario(name, samples):
     print("=" * 72)
     print(f"Baseline landmarks : {len(base)}  (0.5 Hz straight / 1.0 Hz curved)")
 
-    print("\nDREAM threshold sweep (heading + displacement R^2):")
+    print("\nDREAM threshold sweep (path linearity + speed R^2):")
     print("-" * 72)
     print(f"{'R2_th':>7} | {'N_dream':>7} | {'DR':>7} | "
           f"{'psi RMSE':>9} | {'base RMSE':>9}")
