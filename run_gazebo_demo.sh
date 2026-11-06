@@ -18,6 +18,7 @@ set -eo pipefail
 
 WORLD="${1:-recovery_corridor.sdf}"
 R2_TH="${R2_TH:-0.98}"
+STRATEGY="${STRATEGY:-geometry}"
 WS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 source /opt/ros/humble/setup.bash
@@ -52,6 +53,7 @@ exec ros2 launch vslam_recovery_core paper_simulation_demo.launch.py \
     world:="$WORLD" \
     use_dream:=true \
     r2_threshold:="$R2_TH" \
+    strategy:="$STRATEGY" \
     max_window_arc:=1.0 \
     max_window_size:=5000 \
     rviz:=true

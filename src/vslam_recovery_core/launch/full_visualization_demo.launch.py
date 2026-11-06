@@ -67,6 +67,7 @@ def generate_launch_description():
     max_window_size = LaunchConfiguration('max_window_size')
     regress_speed = LaunchConfiguration('regress_speed')
     min_event_spacing = LaunchConfiguration('min_event_spacing')
+    strategy = LaunchConfiguration('strategy')
 
     # Sensor-noise injection (odom_sanitizer).
     sigma_v = LaunchConfiguration('sigma_v')
@@ -185,6 +186,7 @@ def generate_launch_description():
             'max_window_size': max_window_size,
             'regress_speed': regress_speed,
             'min_event_spacing': min_event_spacing,
+            'strategy': strategy,
         }],
     )
 
@@ -267,6 +269,8 @@ def generate_launch_description():
         DeclareLaunchArgument('max_window_size', default_value='500'),
         DeclareLaunchArgument('regress_speed', default_value='true'),
         DeclareLaunchArgument('min_event_spacing', default_value='0.2'),
+        DeclareLaunchArgument('strategy', default_value='geometry',
+                              description="DREAM strategy: 'geometry' (path+speed linearity) or 'velocity' (v+w linearity)."),
         DeclareLaunchArgument('sigma_v', default_value='0.0',
                               description='odometry linear-velocity noise std (m/s)'),
         DeclareLaunchArgument('sigma_w', default_value='0.0',

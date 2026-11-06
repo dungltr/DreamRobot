@@ -254,3 +254,94 @@ class DreamSampler:
     @property
     def last_event_t(self):
         return self._last_event_t
+
+
+class VelocityDreamSampler:
+    """Velocity-based DREAM variant: two linear-regression trackers in parallel.
+
+    The geometry-based :class:`DreamSampler` watches the (x, y) path linearity
+    and the travelled-distance linearity s(t). This variant instead watches the
+    *raw* odometry velocities directly, as two parallel trackers over one
+    growing window:
+
+      1. linear velocity   v(t) -> R^2 of the local linear fit;
+      2. angular velocity  w(t) -> R^2 of the local linear fit.
+
+    The combined goodness is G = min(R^2_v, R^2_w). While G >= R^2_th the
+    motion is a linear regime (steady speed and steady turn) and nothing is
+    logged; when G < R^2_th a transition is signalled and the boundary
+    landmark is flushed.
+
+    Caveat: on *clean* odometry a constant v or w yields R^2 = 1 (no trigger),
+    but under sensor noise a constant signal has no time trend and its R^2
+    collapses toward 0, so this variant is noise-sensitive on steady segments
+    -- the very degeneracy the (x, y) path linearity is designed to avoid.
+    """
+
+    def __init__(self, r2_threshold=0.98, min_window_size=5,
+                 max_window_size=500, min_event_spacing=0.2):
+        self.r2_threshold = float(r2_threshold)
+        self.min_window_size = int(min_window_size)
+        self.max_window_size = int(max_window_size)
+        self.min_event_spacing = float(min_event_spacing)
+
+        self._window = []                  # (t_local, v, w)
+        self._vel = LinFitAccumulator()    # v(t)
+        self._ang = LinFitAccumulator()    # w(t)
+        self._anchor = None
+        self._last_event_t = None
+        self.n_events = 0
+
+    def _append(self, t, v, w):
+        self._window.append((t, v, w))
+        self._vel.add(t, v)
+        self._ang.add(t, w)
+
+    def _drop_oldest(self):
+        t, v, w = self._window.pop(0)
+        self._vel.remove(t, v)
+        self._ang.remove(t, w)
+
+    def _goodness(self):
+        return min(self._vel.r2(), self._ang.r2())
+
+    def update(self, t, v, w):
+        """Feed one (time, linear velocity, angular velocity) sample.
+
+        Returns True when a transition event occurs and a landmark should be
+        recorded (this includes the very first start landmark).
+        """
+        if self._anchor is None:
+            self._anchor = t
+            self._last_event_t = t
+            self._append(0.0, v, w)
+            self.n_events += 1
+            return True
+
+        t_local = max(0.0, t - self._anchor)
+        self._append(t_local, v, w)
+        while len(self._window) > self.max_window_size:
+            self._drop_oldest()
+
+        if len(self._window) < self.min_window_size:
+            return False
+        if self._goodness() >= self.r2_threshold:
+            return False
+        if t - self._last_event_t < self.min_event_spacing:
+            return False
+
+        # Transition event: restart the window at the boundary sample.
+        self._last_event_t = t
+        self.n_events += 1
+        tl, bv, bw = self._window[-1]
+        self._anchor += tl
+        self._window = [(0.0, bv, bw)]
+        self._vel = LinFitAccumulator()
+        self._ang = LinFitAccumulator()
+        self._vel.add(0.0, bv)
+        self._ang.add(0.0, bw)
+        return True
+
+    @property
+    def last_event_t(self):
+        return self._last_event_t

@@ -61,6 +61,7 @@ def generate_launch_description():
     max_window_arc = LaunchConfiguration('max_window_arc')
     regress_speed = LaunchConfiguration('regress_speed')
     min_event_spacing = LaunchConfiguration('min_event_spacing')
+    strategy = LaunchConfiguration('strategy')
 
     # Auto-start the dashboard's trajectory following (no button press).
     auto_run = LaunchConfiguration('auto_run')
@@ -183,6 +184,7 @@ def generate_launch_description():
             'max_window_arc': max_window_arc,
             'regress_speed': regress_speed,
             'min_event_spacing': min_event_spacing,
+            'strategy': strategy,
         }],
     )
 
@@ -272,6 +274,8 @@ def generate_launch_description():
                               description='Optional arc-length window cap (m); 0 disables.'),
         DeclareLaunchArgument('regress_speed', default_value='true'),
         DeclareLaunchArgument('min_event_spacing', default_value='0.2'),
+        DeclareLaunchArgument('strategy', default_value='geometry',
+                              description="DREAM strategy: 'geometry' (path+speed linearity) or 'velocity' (v+w linearity)."),
         DeclareLaunchArgument('auto_run', default_value='false',
                               description='Auto-start the dashboard trajectory following.'),
         DeclareLaunchArgument('sigma_v', default_value='0.0',

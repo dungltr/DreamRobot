@@ -63,14 +63,23 @@ class DreamSamplerNode(Node):
         regress_speed = self.declare_parameter("regress_speed", True).value
         min_event_spacing = self.declare_parameter("min_event_spacing", 0.2).value
         max_window_arc = self.declare_parameter("max_window_arc", 0.0).value
+        strategy = self.declare_parameter("strategy", "geometry").value
+        self.strategy = strategy
 
-        self.sampler = dream_core.DreamSampler(
-            r2_threshold=r2_threshold,
-            min_window_size=min_window_size,
-            max_window_size=max_window_size,
-            regress_speed=regress_speed,
-            min_event_spacing=min_event_spacing,
-            max_window_arc=(max_window_arc if max_window_arc > 0.0 else None))
+        if strategy == 'velocity':
+            self.sampler = dream_core.VelocityDreamSampler(
+                r2_threshold=r2_threshold,
+                min_window_size=min_window_size,
+                max_window_size=max_window_size,
+                min_event_spacing=min_event_spacing)
+        else:
+            self.sampler = dream_core.DreamSampler(
+                r2_threshold=r2_threshold,
+                min_window_size=min_window_size,
+                max_window_size=max_window_size,
+                regress_speed=regress_speed,
+                min_event_spacing=min_event_spacing,
+                max_window_arc=(max_window_arc if max_window_arc > 0.0 else None))
 
         self.odom_sub = self.create_subscription(
             Odometry, self.odom_topic, self.odom_callback, 10)
@@ -87,6 +96,7 @@ class DreamSamplerNode(Node):
         self.get_logger().info(
             f"DreamSamplerNode ready. odom='{self.odom_topic}' "
             f"service='{self.service_name}' R2_th={r2_threshold:.3f} "
+            f"strategy='{strategy}' "
             f"min_window={min_window_size} max_window={max_window_size} "
             f"max_window_arc={max_window_arc} "
             f"regress_speed={regress_speed}")
@@ -114,13 +124,21 @@ class DreamSamplerNode(Node):
         else:
             self._unwrapped_psi = dream_core.unwrap_delta(self._unwrapped_psi, psi)
 
-        # Cumulative travelled distance.
-        if self._last_x is not None:
-            self._cum_s += math.hypot(x - self._last_x, y - self._last_y)
-        self._last_x = x
-        self._last_y = y
+        # Cumulative travelled distance is only needed by the geometry strategy.
+        if self.strategy == 'velocity':
+            v = msg.twist.twist.linear.x
+            w = msg.twist.twist.angular.z
+            if not (math.isfinite(v) and math.isfinite(w)):
+                return
+            triggered = self.sampler.update(stamp, v, w)
+        else:
+            if self._last_x is not None:
+                self._cum_s += math.hypot(x - self._last_x, y - self._last_y)
+            self._last_x = x
+            self._last_y = y
+            triggered = self.sampler.update(stamp, x, y, self._cum_s)
 
-        if self.sampler.update(stamp, x, y, self._cum_s):
+        if triggered:
             # A transition (or the start landmark) occurred: flush a landmark.
             dt = stamp - self._last_event_stamp if self._last_event_stamp is not None else 1.0
             frequency = 1.0 / dt if dt > 1e-3 else 1.0
