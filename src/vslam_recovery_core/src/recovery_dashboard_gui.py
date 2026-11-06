@@ -86,7 +86,6 @@ MAX_ANG_ACCEL = 0.50            # rad/s^2
 
 # Per-mode speed profiles.
 MODE1_LIN = 0.08                # fixed linear speed (m/s)
-MODE1_ANG = 0.20                # fixed in-place turn speed (rad/s)
 MODE2_LIN_OBSTACLE = 0.05       # m/s, near obstacles
 MODE2_LIN_STRAIGHT = 0.15       # m/s, on straights
 MODE2_ANG = 0.25                # rad/s, in-place / corrective turn
@@ -335,10 +334,7 @@ class DashboardNode(Node):
 
         if self.auto_phase == 'turn':
             lin = 0.0
-            if self.auto_mode == 1:
-                ang = MODE1_ANG if heading_error > 0.0 else -MODE1_ANG
-            else:
-                ang = clamp(2.0 * heading_error, -MODE2_ANG, MODE2_ANG)
+            ang = clamp(2.0 * heading_error, -MODE2_ANG, MODE2_ANG)
             if abs(heading_error) < 0.04:
                 self.auto_phase = 'drive'
         else:
@@ -403,6 +399,10 @@ class DashboardNode(Node):
 
     def manual_stop(self):
         self.stop_auto_run()
+        self.cmd_pub.publish(Twist())
+
+    def stop_motion(self):
+        """Stop the manual teleop stream without cancelling an active auto run."""
         self.cmd_pub.publish(Twist())
 
     def trigger_failure(self):
@@ -626,7 +626,10 @@ class DashboardApp:
         self.node.manual_move(self._max_lin() * lin_sign, 0.2 * ang_sign)
 
     def _on_key_release(self, _event):  # noqa: ARG002
-        self.node.manual_stop()
+        # Releasing a key stops manual teleop motion only. Do NOT cancel an
+        # active auto run here: <KeyRelease> fires for *every* key, so calling
+        # manual_stop() would kill Auto modes 1-4 on any key release.
+        self.node.stop_motion()
 
     # ------------------------------------------------------------------ #
     # GUI event handlers
@@ -694,6 +697,9 @@ class DashboardApp:
     # Periodic GUI + rclpy spin
     # ------------------------------------------------------------------ #
     def _tick(self):
+        # Reschedule FIRST so the GUI/control loop can never die: a plotting
+        # or telemetry exception below must not stop the ROS control timer.
+        self.root.after(50, self._tick)
         try:
             rclpy.spin_once(self.node, timeout_sec=0)
         except Exception as exc:  # noqa: BLE001
@@ -728,7 +734,10 @@ class DashboardApp:
             self.v_hist = self.v_hist[-_PLOT_MAX_POINTS:]
             self.w_hist = self.w_hist[-_PLOT_MAX_POINTS:]
             self.seg_hist = self.seg_hist[-_PLOT_MAX_POINTS:]
-        self._update_plots()
+        try:
+            self._update_plots()
+        except Exception as exc:  # noqa: BLE001
+            print(f'[dashboard] plot error: {exc}')
 
         # Auto-compute RM/PE once the robot stops after back travel.
         if (self.node.state == 'recovery' and not self.node.pe_computed
@@ -745,8 +754,6 @@ class DashboardApp:
                         f'Auto position error: PE={pe:.3f}% RM={rm:.3f}m')
         else:
             self._stopped_ticks = 0
-
-        self.root.after(50, self._tick)
 
 
 def main(args=None):
