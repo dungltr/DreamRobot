@@ -48,7 +48,7 @@ OBSTACLES = [
 ]
 
 # Adaptive pure-pursuit lookahead (manuscript Fig. 9).
-LOOKAHEAD_CURVE = 0.45           # m, inside the S-curve
+LOOKAHEAD_CURVE = 0.25           # m, inside the S-curve
 LOOKAHEAD_STRAIGHT = 0.8         # m, on the straight exit
 CURVE_END_X = 4.0                # x >= this value is treated as straight
 

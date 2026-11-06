@@ -189,6 +189,54 @@ def load_raw(name):
     return raw
 
 
+# Synthetic profiles where BOTH v and w change across segments (the gap the
+# Gazebo worlds A/B/C leave: they keep v fixed and only vary w).
+SYNTH_PROFILES = {
+    'D': [(0.06, 0.0, 1.0), (0.10, 0.30, 2.0), (0.14, -0.30, 2.0),
+          (0.18, 0.30, 2.0), (0.12, -0.30, 2.0), (0.08, 0.0, 1.0)],
+    'E': [(0.08, 0.0, 1.0), (0.16, 0.25, 2.0), (0.08, -0.25, 2.0),
+          (0.16, 0.25, 2.0), (0.08, -0.25, 2.0), (0.16, 0.0, 1.0)],
+    'F': [(0.06, 0.0, 1.0), (0.10, 0.20, 2.5), (0.14, -0.20, 2.5),
+          (0.18, 0.20, 2.5), (0.12, 0.0, 1.5)],
+    'G': [(0.20, 0.0, 1.0), (0.16, 0.35, 2.0), (0.12, -0.35, 2.0),
+          (0.08, 0.35, 2.0), (0.05, 0.0, 1.0)],
+}
+
+MAX_LIN_ACCEL = 0.20
+MAX_ANG_ACCEL = 0.50
+
+
+def synthesize_raw(profile, dt=0.02):
+    """Integrate a (v, w, T) profile kinematically with slew limits to produce
+    raw (t, x, y, v, w) -- the same offline model used for Monte-Carlo."""
+    out = []
+    t = 0.0
+    x = y = yaw = v = w = 0.0
+    for (v_cmd, w_cmd, dur) in profile:
+        n = max(1, int(round(dur / dt)))
+        for _ in range(n):
+            dv = v_cmd - v
+            v = v_cmd if abs(dv) <= MAX_LIN_ACCEL * dt else \
+                v + (MAX_LIN_ACCEL * dt if dv > 0 else -MAX_LIN_ACCEL * dt)
+            dw = w_cmd - w
+            w = w_cmd if abs(dw) <= MAX_ANG_ACCEL * dt else \
+                w + (MAX_ANG_ACCEL * dt if dw > 0 else -MAX_ANG_ACCEL * dt)
+            x += v * math.cos(yaw) * dt
+            y += v * math.sin(yaw) * dt
+            yaw += w * dt
+            t += dt
+            out.append((t, x, y, v, w))
+    return out
+
+
+def get_raw(name):
+    """Return raw (t, x, y, v, w) for a benchmark world (A/B/C recorded in
+    Gazebo) or a synthetic profile (D/E/F/G)."""
+    if name in SYNTH_PROFILES:
+        return synthesize_raw(SYNTH_PROFILES[name])
+    return load_raw(name)
+
+
 def mean_ci(values, z=1.96):
     m = sum(values) / len(values)
     if len(values) < 2:
@@ -308,7 +356,7 @@ def with_endpoint(idx, n):
 
 
 def evaluate_clean(name):
-    raw = load_raw(name)
+    raw = get_raw(name)
     full = reconstruct_full(raw)
     base_idx = baseline_landmarks(full)
     print(f"--- World {name} (clean, single run) ---")
@@ -327,7 +375,7 @@ def evaluate_clean(name):
 
 
 def evaluate_mc(name, runs):
-    raw = load_raw(name)
+    raw = get_raw(name)
     base_full = reconstruct_full(raw)
     base_idx = baseline_landmarks(base_full)
     print(f"--- World {name} (Monte-Carlo, {runs} runs, "
@@ -360,6 +408,13 @@ def main():
     print('DREAM strategy comparison: geometry vs velocity')
     print('=' * 78)
     for name in 'ABC':
+        if args.mc:
+            evaluate_mc(name, args.runs)
+        else:
+            evaluate_clean(name)
+        print()
+    print('--- Synthetic D/E/F/G (v and w change simultaneously) ---')
+    for name in 'DEFG':
         if args.mc:
             evaluate_mc(name, args.runs)
         else:
