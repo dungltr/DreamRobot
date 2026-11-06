@@ -200,8 +200,12 @@ def build_samples(path):
     return samples
 
 
-def run_mode(mode):
-    """Run forward motion + 90% camera failure + recovery. Return metrics."""
+def run_mode(mode, strategy='geometry'):
+    """Run forward motion + 90% camera failure + recovery. Return metrics.
+
+    strategy: 'geometry' (path+speed linearity), 'velocity' (v+w R^2), or
+    'speed_error' (v+w deadband normalized by max speed).
+    """
     node = _FakeDashboardNode(mode)
     x = y = 0.0
     yaw = 0.0
@@ -212,13 +216,24 @@ def run_mode(mode):
     total = nominal_forward_length(mode)
     trigger_dist = 0.9 * total
 
-    sampler = dream_core.DreamSampler(
-        r2_threshold=DREAM_R2_TH,
-        min_window_size=DREAM_MIN_WINDOW,
-        max_window_size=DREAM_MAX_WINDOW,
-        regress_speed=True,
-        min_event_spacing=DREAM_MIN_EVENT_SPACING,
-        max_window_arc=DREAM_MAX_WINDOW_ARC)
+    if strategy == 'velocity':
+        sampler = dream_core.VelocityDreamSampler(
+            r2_threshold=DREAM_R2_TH,
+            min_window_size=DREAM_MIN_WINDOW,
+            max_window_size=DREAM_MAX_WINDOW,
+            min_event_spacing=DREAM_MIN_EVENT_SPACING)
+    elif strategy == 'speed_error':
+        sampler = dream_core.SpeedDeadbandSampler(
+            threshold=0.15, v_max=0.20, w_max=0.50,
+            min_event_spacing=DREAM_MIN_EVENT_SPACING)
+    else:
+        sampler = dream_core.DreamSampler(
+            r2_threshold=DREAM_R2_TH,
+            min_window_size=DREAM_MIN_WINDOW,
+            max_window_size=DREAM_MAX_WINDOW,
+            regress_speed=True,
+            min_event_spacing=DREAM_MIN_EVENT_SPACING,
+            max_window_arc=DREAM_MAX_WINDOW_ARC)
 
     # Recorded landmarks as (v, w, d, T, psi, x, y) — the YAML layout.
     landmarks = []
@@ -271,7 +286,11 @@ def run_mode(mode):
             unwrapped_psi += norm(yaw - unwrapped_psi)
 
         # DREAM sampling (mirrors dream_sampler_node + recovery_recorder_server).
-        if sampler.update(t, x, y, dist):
+        if strategy in ('velocity', 'speed_error'):
+            triggered = sampler.update(t, v, w)
+        else:
+            triggered = sampler.update(t, x, y, dist)
+        if triggered:
             dt_event = t - last_event_t if last_event_t is not None else 1.0
             frequency = 1.0 / dt_event if dt_event > 1e-3 else 1.0
             last_event_t = t
@@ -361,24 +380,30 @@ def run_mode(mode):
 
 def main():
     ot.configure(WORLD)
+    strategies = ['geometry', 'velocity', 'speed_error']
+    if len(sys.argv) > 1:
+        strategies = [sys.argv[1]]
+
     print("=" * 78)
     print("Offline DREAM auto-mode recovery check "
           "(camera failure at 90% of forward distance)")
     print("=" * 78)
 
     all_ok = True
-    for mode in (1, 2, 3, 4):
-        r = run_mode(mode)
-        status = "PASS" if r["ok"] else "FAIL"
-        if not r["ok"]:
-            all_ok = False
-        print(f"Mode {mode}: {status}  n_lm={r['n_lm']:>3}  "
-              f"final_err={r['final_err']:.3f} m  "
-              f"wall_margin={r['min_wall']:.3f} m  "
-              f"obst_clear={r['min_obst']:.3f} m  coll={r['coll']}  "
-              f"t={r['t']:.1f} s")
-        if r["reason"]:
-            print(f"          reason: {r['reason']}")
+    for strategy in strategies:
+        print(f"\n--- Strategy: {strategy} ---")
+        for mode in (1, 2, 3, 4):
+            r = run_mode(mode, strategy)
+            status = "PASS" if r["ok"] else "FAIL"
+            if not r["ok"]:
+                all_ok = False
+            print(f"Mode {mode}: {status}  n_lm={r['n_lm']:>3}  "
+                  f"final_err={r['final_err']:.3f} m  "
+                  f"wall_margin={r['min_wall']:.3f} m  "
+                  f"obst_clear={r['min_obst']:.3f} m  coll={r['coll']}  "
+                  f"t={r['t']:.1f} s")
+            if r["reason"]:
+                print(f"          reason: {r['reason']}")
 
     print("-" * 78)
     print("RESULT:", "ALL PASS" if all_ok else "FAILURES PRESENT")
