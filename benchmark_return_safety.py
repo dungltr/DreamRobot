@@ -42,6 +42,45 @@ OBSTACLES = {
 }
 OBST_R = 0.2
 
+# Robot footprint (mirrors test_auto_recovery_sim.py so the corridor demo and
+# the Worlds A/B/C safety metrics use the *same* rectangle model).
+ROBOT_HW = 0.15   # half length along the chassis x axis (m)
+ROBOT_HD = 0.10   # half width along the chassis y axis (m)
+
+
+def robot_corners(x, y, yaw):
+    """Return the four corners of the robot rectangle at pose (x, y, yaw)."""
+    c = math.cos(yaw)
+    s = math.sin(yaw)
+    pts = []
+    for sx in (-ROBOT_HW, ROBOT_HW):
+        for sy in (-ROBOT_HD, ROBOT_HD):
+            pts.append((x + sx * c - sy * s, y + sx * s + sy * c))
+    return pts
+
+
+def dist_point_rect(px, py, cx, cy, yaw):
+    """Distance from point (px, py) to the robot rectangle (0 = inside/on edge).
+
+    Mirrors test_auto_recovery_sim.py: the closest point on the rotated
+    rectangle is found by transforming the query point into the robot frame.
+    """
+    c = math.cos(-yaw)
+    s = math.sin(-yaw)
+    dx = px - cx
+    dy = py - cy
+    lx = dx * c - dy * s
+    ly = dx * s + dy * c
+    qx = abs(lx) - ROBOT_HW
+    qy = abs(ly) - ROBOT_HD
+    if qx <= 0.0 and qy <= 0.0:
+        return 0.0
+    if qx <= 0.0:
+        return qy
+    if qy <= 0.0:
+        return qx
+    return math.hypot(qx, qy)
+
 
 def load_recon(name):
     raw = []
@@ -53,13 +92,18 @@ def load_recon(name):
 
 
 def simulate_return(recon, idx, lookahead=0.45, speed=0.12):
-    """Simulate the closed-loop pure-pursuit return and record the (x, y) path.
+    """Simulate the closed-loop pure-pursuit return and record the (x, y, yaw)
+    path.
 
-    Mirrors recovery_pe_closed_loop() but returns the full trajectory so that
-    independent safety metrics can be measured.
+    Mirrors recovery_pe_closed_loop() but returns the full trajectory (with
+    heading, so footprint-aware clearance can be measured) plus the return
+    duration, which is independent of the stopping tolerance.
+
+    Returns (track, pe, t_return); track is None and pe is inf when the path
+    is not reconstructable.
     """
     if len(idx) < 2:
-        return None, float("inf")
+        return None, float("inf"), float("inf")
 
     forward = [(recon[i][1], recon[i][2]) for i in idx]
     x = recon[-1][1]
@@ -67,7 +111,7 @@ def simulate_return(recon, idx, lookahead=0.45, speed=0.12):
     yaw = recon[-1][3]
     dt = 1.0 / 50.0
     kFinalTolerance = 0.03
-    track = [(x, y)]
+    track = [(x, y, yaw)]
 
     def clamp(v, lo, hi):
         return max(lo, min(hi, v))
@@ -123,8 +167,8 @@ def simulate_return(recon, idx, lookahead=0.45, speed=0.12):
         y += v * math.sin(yaw) * dt
         yaw = norm(yaw + w * dt)
         t += dt
-        track.append((x, y))
-    return track, math.hypot(x, y)
+        track.append((x, y, yaw))
+    return track, math.hypot(x, y), (rt + t)
 
 
 def dist_seg(x, y, ax, ay, bx, by):
@@ -136,18 +180,27 @@ def dist_seg(x, y, ax, ay, bx, by):
 
 
 def metrics(track, obstacles):
-    wall = min(WALL_HALF - abs(py) for (_px, py) in track)
+    """Footprint-aware clearance along the return trajectory.
+
+    Wall clearance is the minimum distance from the corridor inner face to the
+    robot body; obstacle clearance is the minimum distance from the obstacle
+    surface (radius already subtracted) to the robot body. Both use the same
+    rectangle footprint as the corridor demo (test_auto_recovery_sim.py).
+    """
+    wall = float("inf")
     obs = float("inf")
-    for (ox, oy) in obstacles:
-        for (px, py) in track:
-            obs = min(obs, math.hypot(px - ox, py - oy) - OBST_R)
+    for (px, py, yaw) in track:
+        for (cx, cy) in robot_corners(px, py, yaw):
+            wall = min(wall, WALL_HALF - abs(cy))
+        for (ox, oy) in obstacles:
+            obs = min(obs, dist_point_rect(ox, oy, px, py, yaw) - OBST_R)
     return wall, obs
 
 
 def max_lateral(track, recon):
     fwd = [(r[1], r[2]) for r in recon]
     worst = 0.0
-    for (px, py) in track:
+    for (px, py, _yaw) in track:
         best = float("inf")
         for i in range(len(fwd) - 1):
             best = min(best, dist_seg(px, py, fwd[i][0], fwd[i][1],
@@ -168,16 +221,16 @@ def main():
         d_idx = rb.dream_sampler(recon, r2_threshold=0.98)
         print(f"\n--- World {name} ---")
         print(f"{'sampler':<10} {'N':>4} {'PE(m)':>7} {'wall(m)':>9} "
-              f"{'obstacle(m)':>12} {'lateral(m)':>11}")
+              f"{'obstacle(m)':>12} {'lateral(m)':>11} {'time(s)':>8}")
         for label, idx in (("baseline", b_idx), ("DREAM", d_idx)):
-            track, pe = simulate_return(recon, idx)
+            track, pe, t_ret = simulate_return(recon, idx)
             if track is None:
                 print(f"{label:<10} {len(idx):>4} {'inf':>7}")
                 continue
             wall, obs = metrics(track, obstacles)
             lat = max_lateral(track, recon)
             print(f"{label:<10} {len(idx):>4} {pe:>7.3f} {wall:>9.3f} "
-                  f"{obs:>12.3f} {lat:>11.3f}")
+                  f"{obs:>12.3f} {lat:>11.3f} {t_ret:>8.1f}")
 
     if do_sweep:
         print("\n" + "=" * 84)
@@ -192,7 +245,7 @@ def main():
                   f"{'obstacle(m)':>12}")
             for lookahead in (0.30, 0.45, 0.60):
                 for speed in (0.10, 0.12, 0.15):
-                    track, pe = simulate_return(recon, d_idx, lookahead, speed)
+                    track, pe, _t_ret = simulate_return(recon, d_idx, lookahead, speed)
                     wall, obs = metrics(track, obstacles)
                     print(f"{lookahead:>10.2f} {speed:>7.2f} {pe:>8.3f} {wall:>9.3f} "
                           f"{obs:>12.3f}")
