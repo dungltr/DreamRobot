@@ -44,6 +44,7 @@ sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
+from std_msgs.msg import String
 from recovery_interfaces.srv import RecordLandmark
 
 import dream_core
@@ -57,32 +58,19 @@ class DreamSamplerNode(Node):
 
         self.odom_topic = self.declare_parameter("odom_topic", "/odom").value
         self.service_name = self.declare_parameter("service_name", "record_landmark").value
-        r2_threshold = self.declare_parameter("r2_threshold", 0.98).value
-        min_window_size = self.declare_parameter("min_window_size", 5).value
-        max_window_size = self.declare_parameter("max_window_size", 500).value
-        regress_speed = self.declare_parameter("regress_speed", True).value
-        min_event_spacing = self.declare_parameter("min_event_spacing", 0.2).value
-        max_window_arc = self.declare_parameter("max_window_arc", 0.0).value
-        strategy = self.declare_parameter("strategy", "geometry").value
-        self.strategy = strategy
-
-        if strategy == 'velocity':
-            self.sampler = dream_core.VelocityDreamSampler(
-                r2_threshold=r2_threshold,
-                min_window_size=min_window_size,
-                max_window_size=max_window_size,
-                min_event_spacing=min_event_spacing)
-        else:
-            self.sampler = dream_core.DreamSampler(
-                r2_threshold=r2_threshold,
-                min_window_size=min_window_size,
-                max_window_size=max_window_size,
-                regress_speed=regress_speed,
-                min_event_spacing=min_event_spacing,
-                max_window_arc=(max_window_arc if max_window_arc > 0.0 else None))
+        self.r2_threshold = self.declare_parameter("r2_threshold", 0.98).value
+        self.min_window_size = self.declare_parameter("min_window_size", 5).value
+        self.max_window_size = self.declare_parameter("max_window_size", 500).value
+        self.regress_speed = self.declare_parameter("regress_speed", True).value
+        self.min_event_spacing = self.declare_parameter("min_event_spacing", 0.2).value
+        self.max_window_arc = self.declare_parameter("max_window_arc", 0.0).value
+        self.strategy = self.declare_parameter("strategy", "geometry").value
+        self.sampler = self._make_sampler(self.strategy)
 
         self.odom_sub = self.create_subscription(
             Odometry, self.odom_topic, self.odom_callback, 10)
+        self.strategy_sub = self.create_subscription(
+            String, "dream_strategy", self.strategy_callback, 10)
         self.record_cli = self.create_client(RecordLandmark, self.service_name)
 
         # Odometry state for the (psi, s) stream.
@@ -95,11 +83,39 @@ class DreamSamplerNode(Node):
 
         self.get_logger().info(
             f"DreamSamplerNode ready. odom='{self.odom_topic}' "
-            f"service='{self.service_name}' R2_th={r2_threshold:.3f} "
-            f"strategy='{strategy}' "
-            f"min_window={min_window_size} max_window={max_window_size} "
-            f"max_window_arc={max_window_arc} "
-            f"regress_speed={regress_speed}")
+            f"service='{self.service_name}' R2_th={self.r2_threshold:.3f} "
+            f"strategy='{self.strategy}' "
+            f"min_window={self.min_window_size} max_window={self.max_window_size} "
+            f"max_window_arc={self.max_window_arc} "
+            f"regress_speed={self.regress_speed}")
+
+    def _make_sampler(self, strategy):
+        """Build the sampler instance for the requested strategy."""
+        if strategy == 'velocity':
+            return dream_core.VelocityDreamSampler(
+                r2_threshold=self.r2_threshold,
+                min_window_size=self.min_window_size,
+                max_window_size=self.max_window_size,
+                min_event_spacing=self.min_event_spacing)
+        return dream_core.DreamSampler(
+            r2_threshold=self.r2_threshold,
+            min_window_size=self.min_window_size,
+            max_window_size=self.max_window_size,
+            regress_speed=self.regress_speed,
+            min_event_spacing=self.min_event_spacing,
+            max_window_arc=(self.max_window_arc if self.max_window_arc > 0.0 else None))
+
+    def strategy_callback(self, msg):
+        """Switch the sampling strategy at runtime (from the GUI dashboard)."""
+        s = (msg.data or '').strip().lower()
+        if s not in ('geometry', 'velocity'):
+            self.get_logger().warn(f"Unknown strategy '{msg.data}'; ignoring.")
+            return
+        if s == self.strategy:
+            return
+        self.strategy = s
+        self.sampler = self._make_sampler(s)
+        self.get_logger().info(f"Switched DREAM strategy to '{s}'.")
 
     # ------------------------------------------------------------------ #
     # Odometry callback

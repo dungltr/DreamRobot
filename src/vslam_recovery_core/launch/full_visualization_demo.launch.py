@@ -246,6 +246,7 @@ def generate_launch_description():
             'cmd_vel_topic': cmd_vel_topic,
             'failure_trigger_topic': failure_trigger_topic,
             'yaml_file': yaml_file,
+            'strategy': strategy,
         }],
     )
 

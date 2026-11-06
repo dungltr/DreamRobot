@@ -58,7 +58,7 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Bool, Int32
+from std_msgs.msg import Bool, Int32, String
 
 import optimal_trajectory as ot
 
@@ -147,6 +147,7 @@ class DashboardNode(Node):
             os.path.expanduser('~/codewhale_recoveryRobotDREAM/path_landmarks.yaml')).value
         self.auto_run = self.declare_parameter('auto_run', False).value
         self.world = self.declare_parameter('world', 'recovery_corridor.sdf').value
+        self.strategy = self.declare_parameter('strategy', 'geometry').value
         ot.configure(self.world)
 
         self.odom_sub = self.create_subscription(Odometry, self.odom_topic, self.odom_cb, 10)
@@ -154,6 +155,7 @@ class DashboardNode(Node):
         self.cmd_pub = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.trigger_pub = self.create_publisher(Bool, self.trigger_topic, 10)
         self.mode_pub = self.create_publisher(Int32, 'auto_mode', 10)
+        self.strategy_pub = self.create_publisher(String, 'dream_strategy', 10)
 
         # Live state.
         self.v = 0.0
@@ -523,6 +525,12 @@ class DashboardApp:
                   command=lambda: self.node.start_auto_run(4),
                   height=1).pack(fill='x', pady=2)
 
+        self.btn_strategy = tk.Button(
+            modes, text=f'DREAM Strategy: {self.node.strategy}',
+            command=self.on_toggle_strategy, height=1,
+            bg='#455a64', fg='white')
+        self.btn_strategy.pack(fill='x', pady=2)
+
         tk.Button(modes, text='■ EMERGENCY STOP', command=self.node.emergency_stop,
                   height=2, bg='#c62828', fg='white',
                   font=('TkDefaultFont', 12, 'bold')).pack(fill='x', pady=(4, 2))
@@ -636,6 +644,12 @@ class DashboardApp:
     # ------------------------------------------------------------------ #
     # GUI event handlers
     # ------------------------------------------------------------------ #
+    def on_toggle_strategy(self):
+        """Toggle the DREAM sampling strategy (geometry <-> velocity)."""
+        self.node.strategy = 'velocity' if self.node.strategy == 'geometry' else 'geometry'
+        self.node.strategy_pub.publish(String(data=self.node.strategy))
+        self.btn_strategy.config(text=f'DREAM Strategy: {self.node.strategy}')
+
     def on_calculate_error(self):
         result = self.node.compute_error()
         if result is None:

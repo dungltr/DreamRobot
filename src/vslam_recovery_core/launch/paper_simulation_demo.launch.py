@@ -247,6 +247,7 @@ def generate_launch_description():
             'yaml_file': yaml_file,
             'auto_run': auto_run,
             'world': world,
+            'strategy': strategy,
         }],
     )
 
