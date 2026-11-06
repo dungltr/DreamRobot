@@ -132,6 +132,16 @@ def velocity_landmarks(full):
     return idx
 
 
+def speed_error_landmarks(full):
+    """DREAM-style relative-error deadband on linear speed only."""
+    sampler = dream_core.SpeedDeadbandSampler(threshold=0.10, min_window_size=2)
+    idx = []
+    for i, (t, _x, _y, _psi, _s, v, _w) in enumerate(full):
+        if sampler.update(t, v):
+            idx.append(i)
+    return idx
+
+
 # ---------------------------------------------------------------------------
 # Reconstruction-error metrics.
 # ---------------------------------------------------------------------------
@@ -344,6 +354,7 @@ def recovery_pe(full, idx):
 STRATEGIES = {
     'geometry': geometry_landmarks,
     'velocity': velocity_landmarks,
+    'speed_error': speed_error_landmarks,
 }
 
 

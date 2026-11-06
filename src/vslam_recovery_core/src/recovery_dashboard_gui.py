@@ -645,10 +645,13 @@ class DashboardApp:
     # GUI event handlers
     # ------------------------------------------------------------------ #
     def on_toggle_strategy(self):
-        """Toggle the DREAM sampling strategy (geometry <-> velocity)."""
-        self.node.strategy = 'velocity' if self.node.strategy == 'geometry' else 'geometry'
-        self.node.strategy_pub.publish(String(data=self.node.strategy))
-        self.btn_strategy.config(text=f'DREAM Strategy: {self.node.strategy}')
+        """Cycle the DREAM sampling strategy (geometry -> velocity -> speed_error)."""
+        order = ['geometry', 'velocity', 'speed_error']
+        cur = self.node.strategy
+        nxt = order[(order.index(cur) + 1) % len(order)] if cur in order else order[0]
+        self.node.strategy = nxt
+        self.node.strategy_pub.publish(String(data=nxt))
+        self.btn_strategy.config(text=f'DREAM Strategy: {nxt}')
 
     def on_calculate_error(self):
         result = self.node.compute_error()

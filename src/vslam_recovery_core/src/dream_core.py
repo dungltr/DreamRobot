@@ -345,3 +345,70 @@ class VelocityDreamSampler:
     @property
     def last_event_t(self):
         return self._last_event_t
+
+
+class SpeedDeadbandSampler:
+    """Relative-error deadband on linear speed (DREAM-style segment restart).
+
+    An alternative to R^2-based triggering that avoids the constant-signal
+    degeneracy: instead of regressing v(t), it keeps the speed at the segment
+    anchor v_anchor and checks the relative deviation
+
+        e = |v - v_anchor| / max(|v_anchor|, eps)
+
+    While e < threshold the speed is "approximately constant" -> no landmark;
+    when e >= threshold the speed has changed beyond the allowed percentage ->
+    flush the boundary landmark and restart the segment at the current speed
+    (the same segment-restart mechanism as DREAM).
+
+    Parameters
+    ----------
+    threshold : float
+        Relative-error threshold (e.g. 0.10 = 10%).
+    eps : float
+        Floor for the denominator so a near-zero anchor speed is well-defined.
+    """
+
+    def __init__(self, threshold=0.10, min_window_size=2,
+                 min_event_spacing=0.2, eps=1e-3):
+        self.threshold = float(threshold)
+        self.min_window_size = int(min_window_size)
+        self.min_event_spacing = float(min_event_spacing)
+        self.eps = float(eps)
+        self._anchor_v = None
+        self._last_event_t = None
+        self._n = 0
+        self.n_events = 0
+
+    def update(self, t, v):
+        """Feed one (time, linear speed) sample; return True to record."""
+        if self._anchor_v is None:
+            # Segment anchor: establish the reference speed (always recorded).
+            self._anchor_v = v
+            self._last_event_t = t
+            self._n = 1
+            self.n_events = 1
+            return True
+
+        self._n += 1
+        if self._n < self.min_window_size:
+            return False
+
+        denom = max(abs(self._anchor_v), self.eps)
+        e = abs(v - self._anchor_v) / denom
+        if e < self.threshold:
+            return False
+        if t - self._last_event_t < self.min_event_spacing:
+            return False
+
+        # Speed changed beyond the threshold: flush the boundary landmark and
+        # restart the segment at the current speed.
+        self._last_event_t = t
+        self.n_events += 1
+        self._anchor_v = v
+        self._n = 1
+        return True
+
+    @property
+    def last_event_t(self):
+        return self._last_event_t
