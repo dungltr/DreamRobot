@@ -348,43 +348,49 @@ class VelocityDreamSampler:
 
 
 class SpeedDeadbandSampler:
-    """Relative-error deadband on linear speed (DREAM-style segment restart).
+    """Deadband on linear + angular speed, normalized by the MAX speed.
 
-    An alternative to R^2-based triggering that avoids the constant-signal
-    degeneracy: instead of regressing v(t), it keeps the speed at the segment
-    anchor v_anchor and checks the relative deviation
+    Keeps the segment anchor (v_anchor, w_anchor) and checks, for each channel,
+    the absolute deviation normalized by that channel's maximum speed:
 
-        e = |v - v_anchor| / max(|v_anchor|, eps)
+        e_v = |v - v_anchor| / v_max
+        e_w = |w - w_anchor| / w_max
+        e   = max(e_v, e_w)
 
-    While e < threshold the speed is "approximately constant" -> no landmark;
-    when e >= threshold the speed has changed beyond the allowed percentage ->
-    flush the boundary landmark and restart the segment at the current speed
-    (the same segment-restart mechanism as DREAM).
+    Normalizing by a FIXED v_max / w_max (instead of |anchor|) keeps the metric
+    well-conditioned even when the anchor speed is zero (straight line), so a
+    constant speed with noise yields a small, stable error. While e < threshold
+    both speeds are "approximately constant" -> no landmark; when e >= threshold
+    (either channel violated) flush the boundary landmark and restart the
+    segment at the current speeds.
 
     Parameters
     ----------
     threshold : float
-        Relative-error threshold (e.g. 0.10 = 10%).
-    eps : float
-        Floor for the denominator so a near-zero anchor speed is well-defined.
+        Error threshold as a fraction of max speed (e.g. 0.15 = 15%).
+    v_max, w_max : float
+        Full-scale linear / angular speed used for normalization.
     """
 
-    def __init__(self, threshold=0.10, min_window_size=2,
-                 min_event_spacing=0.2, eps=1e-3):
+    def __init__(self, threshold=0.15, min_window_size=2,
+                 min_event_spacing=0.2, v_max=0.20, w_max=0.50):
         self.threshold = float(threshold)
         self.min_window_size = int(min_window_size)
         self.min_event_spacing = float(min_event_spacing)
-        self.eps = float(eps)
+        self.v_max = float(v_max)
+        self.w_max = float(w_max)
         self._anchor_v = None
+        self._anchor_w = None
         self._last_event_t = None
         self._n = 0
         self.n_events = 0
 
-    def update(self, t, v):
-        """Feed one (time, linear speed) sample; return True to record."""
+    def update(self, t, v, w):
+        """Feed one (time, linear speed, angular speed) sample."""
         if self._anchor_v is None:
-            # Segment anchor: establish the reference speed (always recorded).
+            # Segment anchor: establish the reference speeds (always recorded).
             self._anchor_v = v
+            self._anchor_w = w
             self._last_event_t = t
             self._n = 1
             self.n_events = 1
@@ -394,18 +400,20 @@ class SpeedDeadbandSampler:
         if self._n < self.min_window_size:
             return False
 
-        denom = max(abs(self._anchor_v), self.eps)
-        e = abs(v - self._anchor_v) / denom
+        e_v = abs(v - self._anchor_v) / self.v_max
+        e_w = abs(w - self._anchor_w) / self.w_max
+        e = max(e_v, e_w)
         if e < self.threshold:
             return False
         if t - self._last_event_t < self.min_event_spacing:
             return False
 
-        # Speed changed beyond the threshold: flush the boundary landmark and
-        # restart the segment at the current speed.
+        # Either channel changed beyond the threshold: flush the boundary
+        # landmark and restart the segment at the current speeds.
         self._last_event_t = t
         self.n_events += 1
         self._anchor_v = v
+        self._anchor_w = w
         self._n = 1
         return True
 

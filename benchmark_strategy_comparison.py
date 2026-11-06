@@ -133,11 +133,12 @@ def velocity_landmarks(full):
 
 
 def speed_error_landmarks(full):
-    """DREAM-style relative-error deadband on linear speed only."""
-    sampler = dream_core.SpeedDeadbandSampler(threshold=0.10, min_window_size=2)
+    """Deadband on linear + angular speed, normalized by max speed."""
+    sampler = dream_core.SpeedDeadbandSampler(
+        threshold=0.15, v_max=0.20, w_max=0.50, min_window_size=2)
     idx = []
-    for i, (t, _x, _y, _psi, _s, v, _w) in enumerate(full):
-        if sampler.update(t, v):
+    for i, (t, _x, _y, _psi, _s, v, w) in enumerate(full):
+        if sampler.update(t, v, w):
             idx.append(i)
     return idx
 

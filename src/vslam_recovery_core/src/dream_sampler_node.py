@@ -64,7 +64,9 @@ class DreamSamplerNode(Node):
         self.regress_speed = self.declare_parameter("regress_speed", True).value
         self.min_event_spacing = self.declare_parameter("min_event_spacing", 0.2).value
         self.max_window_arc = self.declare_parameter("max_window_arc", 0.0).value
-        self.speed_error_threshold = self.declare_parameter("speed_error_threshold", 0.10).value
+        self.speed_error_threshold = self.declare_parameter("speed_error_threshold", 0.15).value
+        self.speed_v_max = self.declare_parameter("speed_v_max", 0.20).value
+        self.speed_w_max = self.declare_parameter("speed_w_max", 0.50).value
         self.strategy = self.declare_parameter("strategy", "geometry").value
         self.sampler = self._make_sampler(self.strategy)
 
@@ -101,6 +103,8 @@ class DreamSamplerNode(Node):
         if strategy == 'speed_error':
             return dream_core.SpeedDeadbandSampler(
                 threshold=self.speed_error_threshold,
+                v_max=self.speed_v_max,
+                w_max=self.speed_w_max,
                 min_event_spacing=self.min_event_spacing)
         return dream_core.DreamSampler(
             r2_threshold=self.r2_threshold,
@@ -154,9 +158,10 @@ class DreamSamplerNode(Node):
             triggered = self.sampler.update(stamp, v, w)
         elif self.strategy == 'speed_error':
             v = msg.twist.twist.linear.x
-            if not math.isfinite(v):
+            w = msg.twist.twist.angular.z
+            if not (math.isfinite(v) and math.isfinite(w)):
                 return
-            triggered = self.sampler.update(stamp, v)
+            triggered = self.sampler.update(stamp, v, w)
         else:
             if self._last_x is not None:
                 self._cum_s += math.hypot(x - self._last_x, y - self._last_y)
