@@ -17,6 +17,17 @@ they are actually needed (turns, speed changes) and **skips** uniform straight
 segments. As a result it **reduces the number of landmarks that must be stored**
 while still returning accurately.
 
+The project now ships **three DREAM sampling strategies**, selectable from the GUI
+or the command line:
+
+- **geometry** (default) — the paper's method: path linearity `(x,y)` + speed
+  linearity `s(t)`.
+- **velocity** — coefficient of determination `R²` on linear velocity `v(t)` +
+  angular velocity `ω(t)` (an experimental alternative).
+- **speed_error** — a deadband on velocity, normalized by the max speed
+  `|x − x_anchor| / x_max` with a 15% threshold (avoids the `R²` constant-signal
+  degeneracy).
+
 The goal of this README: help you **re-run the tests** and **verify for yourself**
 that the numbers in the draft (the paper) match the actual results.
 
@@ -96,7 +107,8 @@ Summary: 2 packages finished [...]
 
 This is the core “correctness” check: it runs the **actual control law from the code**
 on a simple robot model, loses the camera at 90% of the path, and then measures
-whether the robot returns successfully.
+whether the robot returns successfully. It checks **all three DREAM strategies**
+(geometry, velocity, speed_error) × the 4 Auto modes.
 
 ```bash
 cd ~/codewhale_recoveryRobotDREAM
@@ -105,13 +117,21 @@ source install/setup.bash
 python3 test_auto_recovery_sim.py
 ```
 
-**Expected result** (4 `PASS` lines and a final `ALL PASS` line):
+To run just one strategy, pass it as an argument: `python3 test_auto_recovery_sim.py geometry`.
+
+**Expected result** — three `--- Strategy: ... ---` blocks, 4 `PASS` lines each, and a
+final `ALL PASS` line:
 
 ```
-Mode 1: PASS  n_lm=  9  final_err=0.030 m  wall_margin=0.267 m  obst_clear=0.293 m  coll=None
+--- Strategy: geometry ---
+Mode 1: PASS  n_lm=  9  final_err=0.030 m  wall_margin=0.269 m  obst_clear=0.293 m  coll=None
 Mode 2: PASS  n_lm=  9  final_err=0.029 m  wall_margin=0.273 m  obst_clear=0.300 m  coll=None
-Mode 3: PASS  n_lm=  4  final_err=0.030 m  wall_margin=0.308 m  obst_clear=0.204 m  coll=None
-Mode 4: PASS  n_lm=  4  final_err=0.030 m  wall_margin=0.309 m  obst_clear=0.215 m  coll=None
+Mode 3: PASS  n_lm=  4  final_err=0.029 m  wall_margin=0.282 m  obst_clear=0.239 m  coll=None
+Mode 4: PASS  n_lm=  4  final_err=0.029 m  wall_margin=0.282 m  obst_clear=0.251 m  coll=None
+--- Strategy: velocity ---
+... 4 PASS ...
+--- Strategy: speed_error ---
+... 4 PASS ...
 RESULT: ALL PASS
 ```
 
@@ -261,6 +281,17 @@ source install/setup.bash
 ./run_gazebo_demo.sh
 ```
 
+To start with a different DREAM strategy, set `STRATEGY`:
+
+```bash
+STRATEGY=geometry ./run_gazebo_demo.sh      # default
+STRATEGY=velocity ./run_gazebo_demo.sh
+STRATEGY=speed_error ./run_gazebo_demo.sh
+```
+
+You can also switch strategy **while it is running**: in the Dashboard press the
+**`DREAM Strategy`** button, which cycles `geometry → velocity → speed_error`.
+
 Success indicator: the log shows `Dashboard GUI started.`, `rviz2`, and `ign gazebo`
 running; the topics `/odom_raw`, `/odom`, `/cmd_vel` appear.
 
@@ -285,6 +316,7 @@ then use a VNC client to connect to `machine_address:5900`.
 | Ablation table | `run_gazebo_benchmark.py ... --ablate` | PE `0.030` (except `inf`) |
 | 5-method comparison table | `python3 benchmark_baselines_gazebo.py --mc` | N / path_max as in 2.3.4 |
 | 4 Auto modes + 90% failure table | `python3 test_auto_recovery_sim.py` (offline) or `run_headless_auto_test.py` (real Gazebo) | error `0.030 m` (offline) / `0.060 m` (Gazebo), `coll=None` |
+| Strategy comparison (geometry vs velocity vs speed_error) | `python3 benchmark_strategy_comparison.py` | N / DR / path error per strategy |
 
 ---
 
@@ -305,14 +337,15 @@ If you see:
 
 ## 5. Important files (so you know where things live)
 
-- `src/vslam_recovery_core/src/dream_core.py` — the DREAM algorithm (core).
-- `src/vslam_recovery_core/src/dream_sampler_node.py` — the ROS 2 node that records DREAM landmarks.
+- `src/vslam_recovery_core/src/dream_core.py` — the DREAM algorithm (core; three samplers: `DreamSampler`, `VelocityDreamSampler`, `SpeedDeadbandSampler`).
+- `src/vslam_recovery_core/src/dream_sampler_node.py` — the ROS 2 node that records DREAM landmarks (`strategy` param).
 - `src/vslam_recovery_core/src/recovery_controller.cpp` — the **closed-loop return** controller.
 - `src/vslam_recovery_core/src/recovery_recorder_server.cpp` — the node that writes landmarks to YAML.
-- `src/vslam_recovery_core/src/recovery_dashboard_gui.py` — the control GUI (4 Auto modes).
+- `src/vslam_recovery_core/src/recovery_dashboard_gui.py` — the control GUI (4 Auto modes + `DREAM Strategy` toggle).
 - `test_auto_recovery_sim.py` — quick check (offline).
 - `run_headless_auto_test.py` — full headless Gazebo check.
 - `run_gazebo_benchmark.py`, `sweep_r2_threshold.py`, `benchmark_baselines_gazebo.py` — generate the benchmark tables.
+- `benchmark_strategy_comparison.py` — compares the three DREAM strategies (geometry / velocity / speed_error) on the recorded odometry.
 - `benchmark_footprint.py` — measures the DREAM per-update CPU time and memory.
 - `bench_data/odom_A/B/C.csv` — recorded Gazebo odometry data.
 - `publish/DREAM-ROS2-IEEE.tex` — the IEEE Access paper draft.
