@@ -181,19 +181,21 @@ def main():
 
     if do_sweep:
         print("\n" + "=" * 84)
-        print("Controller sensitivity (DREAM landmarks, World C): PE / min obstacle")
+        print("Controller sensitivity (DREAM landmarks): PE / min obstacle per world")
         print("=" * 84)
-        recon = load_recon("C")
-        d_idx = rb.dream_sampler(recon, r2_threshold=0.98)
-        obstacles = OBSTACLES["C"]
-        print(f"{'lookahead':>10} {'speed':>7} {'PE(m)':>8} {'wall(m)':>9} "
-              f"{'obstacle(m)':>12}")
-        for lookahead in (0.30, 0.45, 0.60):
-            for speed in (0.10, 0.12, 0.15):
-                track, pe = simulate_return(recon, d_idx, lookahead, speed)
-                wall, obs = metrics(track, obstacles)
-                print(f"{lookahead:>10.2f} {speed:>7.2f} {pe:>8.3f} {wall:>9.3f} "
-                      f"{obs:>12.3f}")
+        for name in "ABC":
+            recon = load_recon(name)
+            d_idx = rb.dream_sampler(recon, r2_threshold=0.98)
+            obstacles = OBSTACLES[name]
+            print(f"\n--- World {name} ---")
+            print(f"{'lookahead':>10} {'speed':>7} {'PE(m)':>8} {'wall(m)':>9} "
+                  f"{'obstacle(m)':>12}")
+            for lookahead in (0.30, 0.45, 0.60):
+                for speed in (0.10, 0.12, 0.15):
+                    track, pe = simulate_return(recon, d_idx, lookahead, speed)
+                    wall, obs = metrics(track, obstacles)
+                    print(f"{lookahead:>10.2f} {speed:>7.2f} {pe:>8.3f} {wall:>9.3f} "
+                          f"{obs:>12.3f}")
     return 0
 
 
