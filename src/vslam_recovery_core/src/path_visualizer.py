@@ -15,6 +15,7 @@ that RViz can be run with `odom` as the fixed frame.
 
 import math
 import os
+import re
 import sys
 
 # Allow importing the co-located trajectory helper after colcon installation
@@ -24,11 +25,14 @@ sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry, Path
-from geometry_msgs.msg import PoseStamped, TransformStamped
-from std_msgs.msg import Bool
+from geometry_msgs.msg import Point, PoseStamped, TransformStamped
+from std_msgs.msg import Bool, Int32
+from visualization_msgs.msg import Marker
 import tf2_ros
 
 import optimal_trajectory as ot
+
+_LM_RE = re.compile(r'^landmark_(\d+):\s*\[(.*)\]\s*$')
 
 
 def sanitize_quaternion(q):
@@ -64,17 +68,24 @@ class PathVisualizer(Node):
             'planned_path_topic', '/trajectory/planned_path').value
         self.map_frame = self.declare_parameter('map_frame', 'odom').value
         self.base_frame = self.declare_parameter('base_frame', 'base_link').value
-        world = self.declare_parameter('world', 'recovery_corridor.sdf').value
-        ot.configure(world)
+        self.auto_mode_topic = self.declare_parameter('auto_mode_topic', 'auto_mode').value
+        self.landmarks_topic = self.declare_parameter(
+            'landmarks_topic', '/trajectory/landmarks').value
+        self.yaml_file = self.declare_parameter('yaml_file', 'path_landmarks.yaml').value
+        self.world = self.declare_parameter('world', 'recovery_corridor.sdf').value
+        ot.configure(self.world)
 
         self.odom_sub = self.create_subscription(
             Odometry, self.odom_topic, self.odom_callback, 10)
         self.trigger_sub = self.create_subscription(
             Bool, self.trigger_topic, self.trigger_callback, 10)
+        self.mode_sub = self.create_subscription(
+            Int32, self.auto_mode_topic, self.mode_callback, 10)
 
         self.forward_pub = self.create_publisher(Path, self.forward_topic, 10)
         self.recovery_pub = self.create_publisher(Path, self.recovery_topic, 10)
         self.planned_pub = self.create_publisher(Path, self.planned_topic, 10)
+        self.landmark_pub = self.create_publisher(Marker, self.landmarks_topic, 10)
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         self.forward_path = Path()
@@ -83,11 +94,13 @@ class PathVisualizer(Node):
         self.recovery_path.header.frame_id = self.map_frame
 
         self.recovering = False
+        self.current_mode = 3
 
         # Publish the static optimal reference trajectory once and then
         # periodically so RViz (even a late-joining one) can render it.
         self.publish_planned_path()
         self.planned_timer = self.create_timer(1.0, self.publish_planned_path)
+        self.landmark_timer = self.create_timer(1.0, self.publish_landmarks)
 
         self.get_logger().info(
             f"PathVisualizer ready. forward='{self.forward_topic}' "
@@ -95,24 +108,83 @@ class PathVisualizer(Node):
             f"frame='{self.map_frame}'")
 
     def publish_planned_path(self):
-        """Publish the quintic-spline reference path for RViz."""
-        xs, ys = ot.planned_path_points()
+        """Publish the planned path for the active auto mode.
+
+        Modes 3/4 follow the continuous quintic spline; modes 1/2 follow the
+        straight-segment waypoint polyline, so the yellow reference must switch
+        with the mode instead of always showing the same spline.
+        """
+        if self.current_mode in (1, 2):
+            xs, ys, yaws = ot.waypoint_polyline_points(self.world)
+        else:
+            xs, ys = ot.planned_path_points()
+            yaws = [ot.SPLINE.heading(x) for x in xs]
         path = Path()
         path.header.stamp = self.get_clock().now().to_msg()
         path.header.frame_id = self.map_frame
-        for x, y in zip(xs, ys):
+        for x, y, yaw in zip(xs, ys, yaws):
             pose = PoseStamped()
             pose.header.stamp = path.header.stamp
             pose.header.frame_id = self.map_frame
             pose.pose.position.x = x
             pose.pose.position.y = y
             pose.pose.position.z = 0.0
-            # Heading tangent to the path (identity roll/pitch).
-            yaw = ot.SPLINE.heading(x)
             pose.pose.orientation.z = math.sin(yaw / 2.0)
             pose.pose.orientation.w = math.cos(yaw / 2.0)
             path.poses.append(pose)
         self.planned_pub.publish(path)
+
+    def mode_callback(self, msg):
+        """Repaint the planned path when the dashboard switches auto mode."""
+        if msg.data != self.current_mode:
+            self.current_mode = msg.data
+            self.publish_planned_path()
+
+    def publish_landmarks(self):
+        """Publish the recorded DREAM landmarks as spheres so the sparse
+        sampling (and the resulting chord corner-cutting on the return) is
+        visible against the forward/recovery paths."""
+        pts = self._read_landmarks()
+        marker = Marker()
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.header.frame_id = self.map_frame
+        marker.ns = 'dream_landmarks'
+        marker.id = 0
+        marker.type = Marker.SPHERE_LIST
+        marker.action = Marker.ADD
+        marker.scale.x = 0.08
+        marker.scale.y = 0.08
+        marker.scale.z = 0.08
+        marker.color.r = 1.0
+        marker.color.g = 0.5
+        marker.color.b = 0.0
+        marker.color.a = 1.0
+        for (x, y) in pts:
+            p = Point()
+            p.x = x
+            p.y = y
+            p.z = 0.05
+            marker.points.append(p)
+        self.landmark_pub.publish(marker)
+
+    def _read_landmarks(self):
+        """Return [(x, y), ...] parsed from the recorded landmarks YAML file."""
+        pts = []
+        try:
+            with open(self.yaml_file, 'r') as fh:
+                for line in fh:
+                    m = _LM_RE.match(line.strip())
+                    if not m:
+                        continue
+                    try:
+                        vals = [float(v) for v in m.group(2).split(',')]
+                    except ValueError:
+                        continue
+                    if len(vals) >= 7:
+                        pts.append((vals[5], vals[6]))
+        except (OSError, IOError):
+            pass
+        return pts
 
     def trigger_callback(self, msg):
         if msg.data and not self.recovering:

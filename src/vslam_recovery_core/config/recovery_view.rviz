@@ -146,6 +146,17 @@ Visualization Manager:
       Pose Color: 255; 255; 0
       Value: true
 
+    - Class: rviz_default_plugins/Marker
+      Name: DREAM Landmarks
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /trajectory/landmarks
+      Value: true
+
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

@@ -58,7 +58,7 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Int32
 
 import optimal_trajectory as ot
 
@@ -153,6 +153,7 @@ class DashboardNode(Node):
         self.trigger_sub = self.create_subscription(Bool, self.trigger_topic, self.trigger_cb, 10)
         self.cmd_pub = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.trigger_pub = self.create_publisher(Bool, self.trigger_topic, 10)
+        self.mode_pub = self.create_publisher(Int32, 'auto_mode', 10)
 
         # Live state.
         self.v = 0.0
@@ -247,6 +248,7 @@ class DashboardNode(Node):
     # ------------------------------------------------------------------ #
     def start_auto_run(self, mode):
         self.auto_mode = mode
+        self.mode_pub.publish(Int32(data=mode))
         self.auto_waypoints = ot.waypoints(self.world)
         self.auto_wp_idx = 0
         self.auto_phase = 'turn'

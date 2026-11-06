@@ -227,6 +227,24 @@ def waypoints(world='recovery_corridor.sdf'):
     return list(zip(kx, ky))
 
 
+def waypoint_polyline_points(world='recovery_corridor.sdf'):
+    """Return (xs, ys, yaws) of the turn-then-drive planned path (modes 1/2):
+    the straight segments connecting the spline knots, with each point oriented
+    toward the next waypoint."""
+    wps = waypoints(world)
+    xs = [p[0] for p in wps]
+    ys = [p[1] for p in wps]
+    yaws = []
+    for i in range(len(wps)):
+        if i + 1 < len(wps):
+            yaw = math.atan2(wps[i + 1][1] - wps[i][1],
+                             wps[i + 1][0] - wps[i][0])
+        else:
+            yaw = yaws[-1] if yaws else 0.0
+        yaws.append(yaw)
+    return xs, ys, yaws
+
+
 def nearest_index(x, y):
     """Return the sample index closest to (x, y)."""
     best = 0
