@@ -82,6 +82,28 @@ def send_on_delta(recon, delta=0.05):
     return idx
 
 
+def sweep_angle(recon, angle=0.5):
+    """Online geometric baseline: record a landmark whenever the cumulative
+    heading change (sweep angle) since the last landmark exceeds `angle` (rad)."""
+    idx = [0]
+    cum = 0.0
+    last_psi = recon[0][3]
+    for i, (_t, _x, _y, psi, _s, _v) in enumerate(recon):
+        if i == 0:
+            continue
+        d = psi - last_psi
+        while d > math.pi:
+            d -= 2.0 * math.pi
+        while d < -math.pi:
+            d += 2.0 * math.pi
+        cum += d
+        last_psi = psi
+        if abs(cum) >= angle:
+            idx.append(i)
+            cum = 0.0
+    return idx
+
+
 def heading_rmse(recon, idx):
     if len(idx) < 2:
         return float("inf")
@@ -148,7 +170,8 @@ METHODS = {
     "uniform (1 Hz)": uniform,
     "douglas-peucker (0.05 m)": douglas_peucker,
     "send-on-delta (0.05 m)": send_on_delta,
-    "nyquist (0.5/1.0 Hz)": rb.baseline_sampler,
+    "sweep-angle (0.5 rad)": sweep_angle,
+    "two-rate periodic (0.5/1.0 Hz)": rb.baseline_sampler,
     "dream (R2_th=0.98)": rb.dream_sampler,
 }
 
