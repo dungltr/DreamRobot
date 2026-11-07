@@ -292,6 +292,13 @@ STRATEGY=speed_error ./run_gazebo_demo.sh
 You can also switch strategy **while it is running**: in the Dashboard press the
 **`DREAM Strategy`** button, which cycles `geometry → velocity → speed_error`.
 
+In the **`Failure Simulation`** panel you choose when the camera signal is cut
+**automatically** during an Auto run: **70%, 80%, 90%, or 100%** of the forward
+distance (default **100%**). When the forward distance reaches the chosen
+percentage, the camera fails and the robot returns from that pose. Pressing
+**`CUT CAMERA SIGNAL NOW (return from this pose)`** cuts the camera immediately
+at the robot's current position.
+
 Success indicator: the log shows `Dashboard GUI started.`, `rviz2`, and `ign gazebo`
 running; the topics `/odom_raw`, `/odom`, `/cmd_vel` appear.
 

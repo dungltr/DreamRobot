@@ -32,7 +32,9 @@ obstacles are avoided with 0.55 m centre clearance.
 
 Other controls:
   * manual teleop (buttons + arrow keys + Stop) and speed sliders;
-  * "CUT CAMERA SIGNAL (Trigger Failure)" -> /camera_failure_trigger;
+  * "CUT CAMERA SIGNAL NOW (return from this pose)" -> /camera_failure_trigger;
+  * auto camera cutoff at 70 / 80 / 90 / 100% of the forward distance
+    (default 100%);
   * "Compute Position Error (PE %)" -> RM and PE (Equation 2).
 """
 
@@ -171,6 +173,10 @@ class DashboardNode(Node):
         self.pe_computed = False
         self.pe_result = None
 
+        # Automatic camera-cutoff threshold (percentage of the forward path).
+        self.failure_percent = 100      # 70 / 80 / 90 / 100
+        self.failure_fired = False      # latch: fire the auto-cutoff once per run
+
         # Closed-loop auto-navigation state.
         self.auto_mode = 3
         self.auto_waypoints = ot.waypoints(self.world)
@@ -255,6 +261,12 @@ class DashboardNode(Node):
         self.auto_wp_idx = 0
         self.auto_phase = 'turn'
         self.auto_active = True
+        # A fresh run starts from the origin: reset the travelled distances
+        # and re-arm the automatic camera cutoff for this run.
+        self.state = 'forward'
+        self.forward_dist = 0.0
+        self.recovery_dist = 0.0
+        self.failure_fired = False
         self.auto_last_v = 0.0
         self.auto_last_w = 0.0
         if self.auto_timer is None:
@@ -288,6 +300,13 @@ class DashboardNode(Node):
             v_des, w_des = self._control_trajectory()
 
         if v_des is None:
+            # Mission finished (the robot reached 100% of the forward path).
+            # If the camera has not been cut yet (threshold = 100%), cut it
+            # now so the robot returns from the end pose.
+            if not self.failure_fired and self.state == 'forward':
+                self.failure_fired = True
+                self.get_logger().info('Auto camera cutoff at 100% (end of path).')
+                self.trigger_failure()
             return  # mission finished / already stopped
 
         # Slew-rate limits -> smooth acceleration, no velocity/steering jumps.
@@ -303,6 +322,18 @@ class DashboardNode(Node):
         twist.linear.x = v
         twist.angular.z = w
         self.cmd_pub.publish(twist)
+
+        # Automatic camera cutoff: when the forward distance reaches the
+        # selected percentage of the nominal path length, fail the camera now
+        # (the recovery controller then drives the return from this pose).
+        if (not self.failure_fired and self.state == 'forward'
+                and self.forward_dist >= (self.failure_percent / 100.0)
+                * self.nominal_forward_length()):
+            self.failure_fired = True
+            self.get_logger().info(
+                f'Auto camera cutoff at {self.failure_percent}% '
+                f'(D={self.forward_dist:.3f} m).')
+            self.trigger_failure()
 
     def _control_waypoint(self):
         """Segmented turn-then-drive following for Features 1 and 2."""
@@ -418,6 +449,22 @@ class DashboardNode(Node):
         # fight the recovery controller during the return trip.
         self.stop_auto_run()
         self.get_logger().info('Camera failure trigger published.')
+
+    def nominal_forward_length(self):
+        """Total forward path length (m) for the current auto mode."""
+        if self.auto_mode in (1, 2):
+            wps = ot.waypoints(self.world)
+            return sum(math.hypot(wps[i + 1][0] - wps[i][0],
+                                  wps[i + 1][1] - wps[i][1])
+                       for i in range(len(wps) - 1))
+        return ot._SAMPLED[2][-1]
+
+    def set_failure_percent(self, pct):
+        """Set the automatic camera-cutoff threshold and re-arm it."""
+        self.failure_percent = int(pct)
+        self.failure_fired = False
+        self.get_logger().info(
+            f'Camera auto-cutoff set to {self.failure_percent}%.')
 
     def compute_error(self):
         d_forward = self.forward_dist
@@ -568,7 +615,23 @@ class DashboardApp:
         actions = tk.LabelFrame(self.scrollable_frame, text='Failure Simulation')
         actions.pack(fill='x', padx=10, pady=4)
 
-        tk.Button(actions, text='CUT CAMERA SIGNAL (Trigger Failure)',
+        tk.Label(actions, text='Auto cut camera signal at (forward distance):',
+                 fg='#455a64').pack(anchor='w', padx=6)
+        self.fail_pct_var = tk.StringVar(value='100')
+        pct_frame = tk.Frame(actions)
+        pct_frame.pack(anchor='w', padx=6, pady=(0, 2))
+        for pct in (70, 80, 90, 100):
+            tk.Radiobutton(
+                pct_frame, text=f'{pct}%', value=str(pct),
+                variable=self.fail_pct_var,
+                command=lambda p=pct: self.on_fail_percent(p)
+            ).pack(side='left', padx=6)
+        self.lbl_cutoff = tk.Label(
+            actions, text='Camera will auto-cut at 100% of the path.',
+            fg='#777777')
+        self.lbl_cutoff.pack(anchor='w', padx=6, pady=(0, 2))
+
+        tk.Button(actions, text='CUT CAMERA SIGNAL NOW (return from this pose)',
                   command=self.node.trigger_failure, height=2,
                   bg='#c62828', fg='white',
                   font=('TkDefaultFont', 12, 'bold')).pack(fill='x', pady=3)
@@ -652,6 +715,12 @@ class DashboardApp:
         self.node.strategy = nxt
         self.node.strategy_pub.publish(String(data=nxt))
         self.btn_strategy.config(text=f'DREAM Strategy: {nxt}')
+
+    def on_fail_percent(self, pct):
+        """Apply the chosen automatic camera-cutoff percentage."""
+        self.node.set_failure_percent(pct)
+        self.lbl_cutoff.config(
+            text=f'Camera will auto-cut at {pct}% of the path.')
 
     def on_calculate_error(self):
         result = self.node.compute_error()
@@ -737,8 +806,14 @@ class DashboardApp:
             text=f'Position: x = {self.node.cur_x:.3f} m, y = {self.node.cur_y:.3f} m')
         self.lbl_seg.config(text=f'Segment: {seg_text}')
         self.lbl_lm.config(text=f'Path landmarks recorded: {self._landmarks}')
+        try:
+            nominal = self.node.nominal_forward_length()
+            target = (self.node.failure_percent / 100.0) * nominal
+        except Exception:
+            nominal = target = 0.0
         self.lbl_dist.config(
-            text=f'Distance: D = {self.node.forward_dist:.3f} m, '
+            text=f'Distance: D = {self.node.forward_dist:.3f} m / '
+                 f'{nominal:.3f} m (auto-cut at {target:.3f} m), '
                  f'CD = {self.node.recovery_dist:.3f} m')
 
         # Append a sample (~20 Hz) and refresh the plots.
