@@ -5,7 +5,8 @@
 # landmarks and recovers from a simulated camera failure.
 #
 # Usage:
-#   ./run_gazebo_demo.sh                      # default corridor (S-curve, 2 obstacles)
+#   ./run_gazebo_demo.sh                      # default corridor (S-curve, 2 obstacles);
+#                                              # World A/B/C can be switched from the GUI
 #   ./run_gazebo_demo.sh world_a_straight.sdf # straight hallway (max compression)
 #   ./run_gazebo_demo.sh world_b_slalom.sdf   # 4-obstacle slalom
 #   ./run_gazebo_demo.sh world_c_scurve.sdf   # long S-curve
@@ -44,12 +45,13 @@ To run the corridor demo:
   4. Press "Compute Position Error (PE %)" to read the return position error.
 
 To run a manuscript benchmark (World A/B/C) from the GUI:
-  1. Launch the matching world, e.g. ./run_gazebo_demo.sh world_b_slalom.sdf
+  1. Launch with ./run_gazebo_demo.sh (no world argument needed).
   2. In the Dashboard pick the world under "Benchmark Experiment
      (World A/B/C)" and press "Run benchmark (auto-cut -> return)".
-  3. The robot drives the scripted open-loop (v, omega) profile (identical to
+  3. The Dashboard restarts Gazebo with the selected world, drives the
+     scripted open-loop (v, omega) profile (identical to
      run_gazebo_benchmark.py), auto-cuts the camera at the selected 70-100%,
-     and the recovery controller returns it to the start.
+     and the recovery controller returns the robot to the start.
 =====================================================================
 EOF
 
