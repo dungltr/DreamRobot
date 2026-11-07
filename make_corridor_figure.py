@@ -4,7 +4,7 @@ make_corridor_figure.py
 
 Generate fig9_corridor_demo.pdf: the recovery-corridor system validation
 figure. It reproduces the dashboard Auto 4 forward run and the closed-loop
-reverse return (camera failure at 90% of the forward distance) using the real
+reverse return (camera failure at 100% of the forward distance) using the real
 controller functions, and overlays the corridor walls and the two obstacles.
 
 Usage:  python3 make_corridor_figure.py
@@ -224,7 +224,7 @@ def main():
     ax.annotate("start", (0.05, 0.1), fontsize=7)
     if trigger is not None:
         ax.plot(trigger[0], trigger[1], "m*", ms=12)
-        ax.annotate("90% failure", (trigger[0] - 1.4, trigger[1] + 0.25),
+        ax.annotate("100% failure", (trigger[0] - 1.4, trigger[1] + 0.25),
                     fontsize=7)
     ax.set_xlim(-0.5, 12.5)
     ax.set_ylim(-1.0, 1.0)

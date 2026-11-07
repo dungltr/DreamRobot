@@ -103,10 +103,10 @@ Summary: 2 packages finished [...]
 
 ---
 
-### 2.1 FASTEST check: 4 Auto modes + camera loss at 90% (no Gazebo needed)
+### 2.1 FASTEST check: 4 Auto modes + camera loss at 100% (no Gazebo needed)
 
 This is the core “correctness” check: it runs the **actual control law from the code**
-on a simple robot model, loses the camera at 90% of the path, and then measures
+on a simple robot model, loses the camera at 100% of the path, and then measures
 whether the robot returns successfully. It checks **all three DREAM strategies**
 (geometry, velocity, speed_error) × the 4 Auto modes.
 
@@ -125,7 +125,7 @@ final `ALL PASS` line:
 ```
 --- Strategy: geometry ---
 Mode 1: PASS  n_lm=  9  final_err=0.030 m  wall_margin=0.269 m  obst_clear=0.293 m  coll=None
-Mode 2: PASS  n_lm=  9  final_err=0.029 m  wall_margin=0.273 m  obst_clear=0.300 m  coll=None
+Mode 2: PASS  n_lm=  9  final_err=0.030 m  wall_margin=0.273 m  obst_clear=0.299 m  coll=None
 Mode 3: PASS  n_lm=  4  final_err=0.029 m  wall_margin=0.282 m  obst_clear=0.239 m  coll=None
 Mode 4: PASS  n_lm=  4  final_err=0.029 m  wall_margin=0.282 m  obst_clear=0.251 m  coll=None
 --- Strategy: velocity ---
@@ -251,7 +251,7 @@ python3 run_headless_auto_test.py
 
 ```
 Mode 1: PASS  final_err=0.060 m  wall=0.269 m  obst=0.293 m  coll=None
-Mode 2: PASS  final_err=0.060 m  wall=0.273 m  obst=0.300 m  coll=None
+Mode 2: PASS  final_err=0.060 m  wall=0.273 m  obst=0.299 m  coll=None
 Mode 3: PASS  final_err=0.060 m  wall=0.282 m  obst=0.239 m  coll=None
 Mode 4: PASS  final_err=0.060 m  wall=0.282 m  obst=0.251 m  coll=None
 ```
@@ -315,7 +315,7 @@ then use a VNC client to connect to `machine_address:5900`.
 | Monte-Carlo table | `run_gazebo_benchmark.py --mc ...` | PE `0.030±0.000 m` |
 | Ablation table | `run_gazebo_benchmark.py ... --ablate` | PE `0.030` (except `inf`) |
 | 5-method comparison table | `python3 benchmark_baselines_gazebo.py --mc` | N / path_max as in 2.3.4 |
-| 4 Auto modes + 90% failure table | `python3 test_auto_recovery_sim.py` (offline) or `run_headless_auto_test.py` (real Gazebo) | error `0.030 m` (offline) / `0.060 m` (Gazebo), `coll=None` |
+| 4 Auto modes + 100% failure table | `python3 test_auto_recovery_sim.py` (offline) or `run_headless_auto_test.py` (real Gazebo) | error `0.030 m` (offline) / `0.060 m` (Gazebo), `coll=None` |
 | Strategy comparison (geometry vs velocity vs speed_error) | `python3 benchmark_strategy_comparison.py` | N / DR / path error per strategy |
 
 ---

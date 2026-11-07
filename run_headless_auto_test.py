@@ -3,7 +3,7 @@
 run_headless_auto_test.py
 
 Headless Gazebo + ROS 2 end-to-end test of the four dashboard auto modes with
-a simulated camera failure at 90% of the forward distance.
+a simulated camera failure at 100% of the forward distance.
 
 The script starts the real stack — Gazebo server (sensor-free headless world),
 ros_gz_bridge, odom_sanitizer, recovery_recorder_server, dream_sampler_node and
@@ -192,7 +192,9 @@ class AutoDriver(Node):
         else:
             res = dash.DashboardNode._control_trajectory(self)
         if res is None or res[0] is None:
-            self.stop_auto_run()
+            # Forward path complete (100% of the nominal distance): fail the
+            # camera now and hand control to the recovery controller.
+            self.trigger()
             return
         v_des, w_des = res
         v = dash.slew(self.auto_last_v, v_des, dash.MAX_LIN_ACCEL * DT)
@@ -287,7 +289,7 @@ def run_mode(mode, timeout=600):
     driver = AutoDriver(mode)
     driver.start_auto_run()
 
-    trigger_dist = 0.9 * nominal_length(mode)
+    trigger_dist = 1.0 * nominal_length(mode)
     min_wall = 1e9
     min_obst = 1e9
     coll = None
@@ -305,6 +307,8 @@ def run_mode(mode, timeout=600):
 
             if not driver.triggered and driver.forward_dist >= trigger_dist:
                 driver.trigger()
+
+            if driver.triggered and t_trigger is None:
                 t_trigger = time.time()
 
             if driver.triggered and t_trigger is not None:
@@ -356,7 +360,7 @@ def main():
     try:
         print("=" * 78)
         print("Headless Gazebo auto-mode recovery test "
-              "(camera failure at 90% of forward distance)")
+              "(camera failure at 100% of forward distance)")
         print("=" * 78)
         all_ok = True
         for m in modes:

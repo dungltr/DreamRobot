@@ -87,10 +87,10 @@ Summary: 2 packages finished [...]
 
 ---
 
-### 2.1 Kiểm tra NHANH nhất: 4 chế độ Auto + mất camera ở 90% (không cần Gazebo)
+### 2.1 Kiểm tra NHANH nhất: 4 chế độ Auto + mất camera ở 100% (không cần Gazebo)
 
 Đây là phép kiểm tra “tính đúng đắn” cốt lõi: nó chạy **đúng luật điều khiển trong code**
-trên một mô hình robot đơn giản, mất camera ở 90% quãng đường, rồi đo robot có quay về
+trên một mô hình robot đơn giản, mất camera ở 100% quãng đường, rồi đo robot có quay về
 được không.
 
 ```bash
@@ -104,7 +104,7 @@ python3 test_auto_recovery_sim.py
 
 ```
 Mode 1: PASS  n_lm=  9  final_err=0.030 m  wall_margin=0.267 m  obst_clear=0.293 m  coll=None
-Mode 2: PASS  n_lm=  9  final_err=0.029 m  wall_margin=0.273 m  obst_clear=0.300 m  coll=None
+Mode 2: PASS  n_lm=  9  final_err=0.030 m  wall_margin=0.273 m  obst_clear=0.299 m  coll=None
 Mode 3: PASS  n_lm=  4  final_err=0.030 m  wall_margin=0.308 m  obst_clear=0.204 m  coll=None
 Mode 4: PASS  n_lm=  4  final_err=0.030 m  wall_margin=0.309 m  obst_clear=0.215 m  coll=None
 RESULT: ALL PASS
@@ -221,7 +221,7 @@ python3 run_headless_auto_test.py
 
 ```
 Mode 1: PASS  final_err=0.060 m  wall=0.267 m  obst=0.293 m  coll=None
-Mode 2: PASS  final_err=0.060 m  wall=0.273 m  obst=0.300 m  coll=None
+Mode 2: PASS  final_err=0.060 m  wall=0.273 m  obst=0.299 m  coll=None
 Mode 3: PASS  final_err=0.060 m  wall=0.309 m  obst=0.205 m  coll=None
 Mode 4: PASS  final_err=0.060 m  wall=0.310 m  obst=0.214 m  coll=None
 ```
@@ -274,7 +274,7 @@ rồi dùng VNC client kết nối tới `địa_chỉ_máy:5900`.
 | Bảng Monte-Carlo | `run_gazebo_benchmark.py --mc ...` | PE `0.030±0.000 m` |
 | Bảng ablation | `run_gazebo_benchmark.py ... --ablate` | PE `0.030` (trừ `inf`) |
 | Bảng so sánh 5 phương pháp | `python3 benchmark_baselines_gazebo.py --mc` | N / path_max như mục 2.3.4 |
-| Bảng 4 chế độ Auto + 90% failure | `python3 test_auto_recovery_sim.py` (offline) hoặc `run_headless_auto_test.py` (Gazebo thật) | lỗi `0.030 m` (offline) / `0.060 m` (Gazebo), `coll=None` |
+| Bảng 4 chế độ Auto + 100% failure | `python3 test_auto_recovery_sim.py` (offline) hoặc `run_headless_auto_test.py` (Gazebo thật) | lỗi `0.030 m` (offline) / `0.060 m` (Gazebo), `coll=None` |
 
 ---
 

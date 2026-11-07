@@ -6,7 +6,7 @@ Deterministic offline kinematic reproduction of the recovery-corridor demo.
 
 It runs the four dashboard auto modes (1..4) using the *real* controller
 functions imported from `recovery_dashboard_gui`, simulates a camera failure
-at 90% of the forward distance, records landmarks with the DREAM sampler and
+at 100% of the forward distance, records landmarks with the DREAM sampler and
 then executes the *new* closed-loop pure-pursuit recovery implemented in
 `recovery_controller.cpp` (pi turn + odometry-feedback path following).
 
@@ -201,7 +201,7 @@ def build_samples(path):
 
 
 def run_mode(mode, strategy='geometry'):
-    """Run forward motion + 90% camera failure + recovery. Return metrics.
+    """Run forward motion + 100% camera failure + recovery. Return metrics.
 
     strategy: 'geometry' (path+speed linearity), 'velocity' (v+w R^2), or
     'speed_error' (v+w deadband normalized by max speed).
@@ -214,7 +214,7 @@ def run_mode(mode, strategy='geometry'):
     last_v = last_w = 0.0
 
     total = nominal_forward_length(mode)
-    trigger_dist = 0.9 * total
+    trigger_dist = 1.0 * total
 
     if strategy == 'velocity':
         sampler = dream_core.VelocityDreamSampler(
@@ -386,7 +386,7 @@ def main():
 
     print("=" * 78)
     print("Offline DREAM auto-mode recovery check "
-          "(camera failure at 90% of forward distance)")
+          "(camera failure at 100% of forward distance)")
     print("=" * 78)
 
     all_ok = True

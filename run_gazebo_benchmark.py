@@ -322,6 +322,56 @@ def dream_sampler(recon, r2_threshold=0.98, regress_speed=True,
     return idx
 
 
+def dream_sampler_deadband(recon, path_threshold=0.98, vel_threshold=0.30,
+                           v_max=0.20, min_window_size=5,
+                           max_window_size=500, min_event_spacing=0.2):
+    """Noise-robust DREAM variant: keep the two-dimensional path linearity but
+    replace the R^2 of s(t) with a max-speed-normalized linear-velocity deadband
+    (|v - v_anchor|/v_max <= vel_threshold). The deadband ignores the small
+    velocity fluctuations that make s(t)-R^2 collapse on short windows, while
+    still firing on a genuine acceleration ramp (a ~100% change)."""
+    sys.path.insert(0, os.path.join(_WS, "src", "vslam_recovery_core", "src"))
+    import dream_core
+    path = dream_core.PathLinearityAccumulator()
+    window = []
+    anchor = None
+    last_event_t = None
+    anchor_v = None
+    idx = []
+
+    for i, (t, x, y, psi, s, v) in enumerate(recon):
+        if anchor is None:
+            anchor = t
+            last_event_t = t
+            anchor_v = v
+            window.append((0.0, x, y, v))
+            path.add(x, y)
+            idx.append(i)
+            continue
+        tl = max(0.0, t - anchor)
+        window.append((tl, x, y, v))
+        path.add(x, y)
+        while len(window) > max_window_size:
+            _, x0, y0, _ = window.pop(0)
+            path.remove(x0, y0)
+        if len(window) < min_window_size:
+            continue
+        lin = path.linearity()
+        e_v = abs(v - anchor_v) / v_max
+        if lin >= path_threshold and e_v <= vel_threshold:
+            continue
+        if t - last_event_t < min_event_spacing:
+            continue
+        last_event_t = t
+        anchor = t
+        anchor_v = v
+        window = [window[-1]]
+        path = dream_core.PathLinearityAccumulator()
+        path.add(window[0][1], window[0][2])
+        idx.append(i)
+    return idx
+
+
 def recovery_pe(recon, landmarks_idx):
     """Simulate the reverse replay and return the Euclidean return error (m)."""
     if len(landmarks_idx) < 2:
@@ -467,6 +517,86 @@ def recovery_pe_closed_loop(recon, landmarks_idx):
     return math.hypot(x, y)
 
 
+def recovery_pe_closed_loop_noisy(recon, landmarks_idx, sigma_v, sigma_w, rng):
+    """Closed-loop reverse replay with odometry noise injected during the
+    RETURN phase (not just the forward phase): the pure-pursuit controller
+    steers from a dead-reckoned odometry estimate that drifts from the true
+    pose, while the true pose integrates the commanded velocities. Returns the
+    true Euclidean distance of the final pose to the origin."""
+    if len(landmarks_idx) < 2:
+        return float("inf")
+
+    forward = [(recon[i][1], recon[i][2]) for i in landmarks_idx]
+
+    # Failure pose = end of the recorded forward trajectory (estimate == true).
+    x = recon[-1][1]
+    y = recon[-1][2]
+    yaw = recon[-1][3]
+    x_est, y_est, yaw_est = x, y, yaw
+
+    dt = 1.0 / 50.0
+    kBaseSpeed = 0.12
+    kLookahead = 0.45
+    kFinalTolerance = 0.03
+
+    # Pi-turn (closed-loop on the estimated heading).
+    target = _norm_angle(yaw + math.pi)
+    rt = 0.0
+    while rt < 12.0:
+        err = _norm_angle(target - yaw_est)
+        if abs(err) < 0.03:
+            break
+        w = _clamp(2.0 * err, -0.8, 0.8)
+        yaw = _norm_angle(yaw + w * dt)
+        yaw_est = _norm_angle(yaw_est + (w + sigma_w * rng.gauss(0.0, 1.0)) * dt)
+        rt += dt
+
+    path = [(x, y)] + list(reversed(forward))
+    if math.hypot(path[-1][0], path[-1][1]) > 1e-3:
+        path.append((0.0, 0.0))
+    samples = _polyline_samples(path)
+
+    last_v = 0.0
+    last_w = 0.0
+    t = 0.0
+    while t < 180.0:
+        dstart_est = math.hypot(x_est, y_est)
+        if dstart_est < kFinalTolerance:
+            break
+        # Controller steers from the drifted odometry estimate.
+        gx, gy = _lookahead_goal(x_est, y_est, samples, kLookahead)
+        alpha = _norm_angle(math.atan2(gy - y_est, gx - x_est) - yaw_est)
+
+        v_des = kBaseSpeed * max(0.0, math.cos(alpha))
+        approach = _clamp(dstart_est / 0.4, 0.0, 1.0)
+        v_des = min(v_des, max(0.02, kBaseSpeed * approach))
+
+        w_des = 2.0 * v_des * math.sin(alpha) / max(kLookahead, 1e-3)
+        w_des = _clamp(w_des, -0.25, 0.25)
+
+        v = _slew(last_v, v_des, 0.20 * dt)
+        w = _slew(last_w, w_des, 0.50 * dt)
+        last_v = v
+        last_w = w
+        v = max(0.0, v)
+        w = _clamp(w, -0.25, 0.25)
+
+        # True pose integrates the commanded velocities.
+        x += v * math.cos(yaw) * dt
+        y += v * math.sin(yaw) * dt
+        yaw = _norm_angle(yaw + w * dt)
+
+        # Odometry estimate integrates noisy velocities (dead-reckoning drift).
+        vn = v + sigma_v * rng.gauss(0.0, 1.0)
+        wn = w + sigma_w * rng.gauss(0.0, 1.0)
+        x_est += vn * math.cos(yaw_est) * dt
+        y_est += vn * math.sin(yaw_est) * dt
+        yaw_est = _norm_angle(yaw_est + wn * dt)
+
+        t += dt
+    return math.hypot(x, y)
+
+
 # ---------------------------------------------------------------------------
 # Monte-Carlo + ablation (offline, on the recorded CSVs)
 # ---------------------------------------------------------------------------
@@ -605,6 +735,62 @@ def compare(csv_path, name):
 
 
 # ---------------------------------------------------------------------------
+# Noise robustness (reviewer round-7 additions)
+# ---------------------------------------------------------------------------
+def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
+                         vel_th=0.30):
+    """Two experiments:
+      (M1) return-phase odometry noise: the closed-loop replay integrates a
+           dead-reckoned estimate, so the same noise affects the RETURN phase;
+      (M2) a noise-robust speed channel: replace s(t)-R^2 with a velocity
+           deadband and compare landmark counts under the same noise.
+    Prints mean +/- 95% CI tables for the three worlds."""
+    print("=" * 78)
+    print(f"Noise robustness (runs={runs}, sigma_v={sigma_v}, sigma_w={sigma_w})")
+    print("=" * 78)
+    import random
+    for name, _w in WORLDS:
+        csv_path = os.path.join(_DATA_DIR, f"odom_{name}.csv")
+        raw = []
+        with open(csv_path, "r") as fh:
+            for row in csv.reader(fh):
+                if row:
+                    raw.append(tuple(float(v) for v in row))
+        recon = reconstruct(raw)
+        n_base = len(baseline_sampler(recon))
+        fwd_b, fwd_d, both_b, both_d = [], [], [], []
+        r2_ns, db_ns = [], []
+        for run in range(runs):
+            rng = random.Random(7000 + run)
+            p = reconstruct_noisy(raw, sigma_v, sigma_w, rng)
+            b = baseline_sampler(p)
+            d = dream_sampler(p)
+            db = dream_sampler_deadband(p, path_threshold=path_th,
+                                        vel_threshold=vel_th)
+            fwd_b.append(recovery_pe_closed_loop(p, b))
+            fwd_d.append(recovery_pe_closed_loop(p, d))
+            r1 = random.Random(7000 + run)
+            both_b.append(recovery_pe_closed_loop_noisy(p, b, sigma_v, sigma_w, r1))
+            r1 = random.Random(7000 + run)
+            both_d.append(recovery_pe_closed_loop_noisy(p, d, sigma_v, sigma_w, r1))
+            r2_ns.append(len(d))
+            db_ns.append(len(db))
+        mb, cb = _mean_ci(both_b)
+        md, cd = _mean_ci(both_d)
+        fb, _ = _mean_ci(fwd_b)
+        fd, _ = _mean_ci(fwd_d)
+        mr2, cr2 = _mean_ci(r2_ns)
+        mdb, cdb = _mean_ci(db_ns)
+        print(f"[{name}] N_base={n_base}")
+        print(f"  M1 PE (m): fwd-noise-only base={fb:.3f} dream={fd:.3f} | "
+              f"both-phase base={mb:.3f}+/-{cb:.3f} dream={md:.3f}+/-{cd:.3f} "
+              f"(max {max(both_b):.3f}/{max(both_d):.3f})")
+        print(f"  M2 N: R2_s channel {mr2:.1f}+/-{cr2:.1f} | "
+              f"velocity-deadband {mdb:.1f}+/-{cdb:.1f}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 SHUTDOWN_WAIT = 1.5
@@ -618,6 +804,8 @@ def main():
                     help="run Monte-Carlo noise analysis on recorded CSVs")
     ap.add_argument("--ablate", action="store_true",
                     help="run ablation (speed signal + window size) on CSVs")
+    ap.add_argument("--noise-robustness", action="store_true",
+                    help="run return-phase noise + noise-robust speed channel")
     ap.add_argument("--runs", type=int, default=20,
                     help="Monte-Carlo runs (--mc)")
     ap.add_argument("--noise", type=float, default=0.02,
@@ -626,6 +814,9 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(_DATA_DIR, exist_ok=True)
+
+    if args.noise_robustness:
+        return run_noise_robustness(runs=args.runs, sigma_w=args.noise)
 
     if args.compare or args.mc or args.ablate:
         for name, _w in WORLDS:
