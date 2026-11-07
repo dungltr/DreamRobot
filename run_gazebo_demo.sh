@@ -5,11 +5,12 @@
 # landmarks and recovers from a simulated camera failure.
 #
 # Usage:
-#   ./run_gazebo_demo.sh                      # default corridor (S-curve, 2 obstacles);
-#                                              # World A/B/C can be switched from the GUI
-#   ./run_gazebo_demo.sh world_a_straight.sdf # straight hallway (max compression)
-#   ./run_gazebo_demo.sh world_b_slalom.sdf   # 4-obstacle slalom
-#   ./run_gazebo_demo.sh world_c_scurve.sdf   # long S-curve
+#   ./run_gazebo_demo.sh                      # interactive menu (or default corridor
+#                                              # when there is no terminal)
+#   ./run_gazebo_demo.sh recovery_corridor.sdf # demo corridor (2 obstacles)
+#   ./run_gazebo_demo.sh world_a_straight.sdf # benchmark World A (straight)
+#   ./run_gazebo_demo.sh world_b_slalom.sdf   # benchmark World B (slalom)
+#   ./run_gazebo_demo.sh world_c_scurve.sdf   # benchmark World C (S-curve)
 #
 # Optional env overrides:
 #   R2_TH (default 0.98) — DREAM linearity threshold.
@@ -17,7 +18,29 @@
 # (e.g. AMENT_TRACE_SETUP_FILES) and break under nounset.
 set -eo pipefail
 
-WORLD="${1:-recovery_corridor.sdf}"
+if [ $# -ge 1 ]; then
+  WORLD="$1"
+else
+  if [ -t 0 ]; then
+    echo "Select a world to run:"
+    echo "  1) recovery_corridor.sdf  (demo corridor, 2 obstacles)"
+    echo "  2) world_a_straight.sdf   (benchmark World A — straight)"
+    echo "  3) world_b_slalom.sdf     (benchmark World B — slalom)"
+    echo "  4) world_c_scurve.sdf     (benchmark World C — S-curve)"
+    printf 'Choice [1]: '
+    read -r CHOICE
+    case "$CHOICE" in
+      1|"") WORLD="recovery_corridor.sdf" ;;
+      2) WORLD="world_a_straight.sdf" ;;
+      3) WORLD="world_b_slalom.sdf" ;;
+      4) WORLD="world_c_scurve.sdf" ;;
+      *) echo "Invalid choice, using recovery_corridor.sdf" >&2
+         WORLD="recovery_corridor.sdf" ;;
+    esac
+  else
+    WORLD="recovery_corridor.sdf"
+  fi
+fi
 R2_TH="${R2_TH:-0.98}"
 STRATEGY="${STRATEGY:-geometry}"
 WS_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -44,14 +67,17 @@ To run the corridor demo:
      replays the recorded path in reverse.
   4. Press "Compute Position Error (PE %)" to read the return position error.
 
-To run a manuscript benchmark (World A/B/C) from the GUI:
-  1. Launch with ./run_gazebo_demo.sh (no world argument needed).
-  2. In the Dashboard pick the world under "Benchmark Experiment
+To run a manuscript benchmark (World A/B/C):
+  1. Pick the world from the launch menu above (or pass it as an argument).
+  2. In the Dashboard pick the same world under "Benchmark Experiment
      (World A/B/C)" and press "Run benchmark (auto-cut -> return)".
-  3. The Dashboard restarts Gazebo with the selected world, drives the
-     scripted open-loop (v, omega) profile (identical to
-     run_gazebo_benchmark.py), auto-cuts the camera at the selected 70-100%,
+  3. The Dashboard drives the scripted open-loop (v, omega) profile (identical
+     to run_gazebo_benchmark.py), auto-cuts the camera at the selected 70-100%,
      and the recovery controller returns the robot to the start.
+
+  If you select a different world in the Dashboard than the one loaded, the
+  Dashboard will restart Gazebo with that world (the ROS nodes stay alive and
+  reconnect automatically).
 =====================================================================
 EOF
 

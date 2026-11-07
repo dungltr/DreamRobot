@@ -528,14 +528,41 @@ class DashboardNode(Node):
     # ------------------------------------------------------------------ #
     # Runtime world switch (restart Gazebo only; ROS recovery nodes stay up)
     # ------------------------------------------------------------------ #
-    def switch_world(self, world_file):
-        """Kill the current Gazebo and start a new one with `world_file`.
+    def _kill_gazebo(self):
+        """Terminate the running Gazebo gracefully.
 
-        The ros_gz_bridge and the recovery nodes are world-agnostic (they only
-        use /odom, /cmd_vel and the camera-failure trigger), so they stay alive
-        and reconnect to the repopulated topics after the new Gazebo starts.
-        The landmarks file is cleared so the recovery replays only the new run.
+        The process is a Ruby wrapper whose executable name is ``ruby``, so a
+        plain ``pkill -x`` on the tool name does not match. We match the full
+        command line *anchored* at the start (``^ign gazebo``): this targets
+        only the Gazebo wrapper + server and never a shell/editor whose text
+        merely contains the words ``ign gazebo``. SIGTERM is sent first so the
+        GUI window closes cleanly instead of freezing as "not responding".
         """
+        subprocess.run(['pkill', '-TERM', '-f', '^ign gazebo'], check=False)
+        time.sleep(2.0)
+        subprocess.run(['pkill', '-9', '-f', '^ign gazebo'], check=False)
+        time.sleep(1.0)
+
+    def _gazebo_env(self):
+        """Return an environment for the restarted Gazebo that carries the
+        same resource paths ros_gz_sim sets up at launch."""
+        env = dict(os.environ)
+        share = os.path.dirname(self.worlds_dir)   # .../share/vslam_recovery_core
+        parts = [
+            self.worlds_dir,
+            os.path.join(share, 'urdf'),
+            env.get('GZ_SIM_RESOURCE_PATH', ''),
+            env.get('IGN_GAZEBO_RESOURCE_PATH', ''),
+        ]
+        resource_path = os.pathsep.join(p for p in parts if p)
+        env['GZ_SIM_RESOURCE_PATH'] = resource_path
+        env['IGN_GAZEBO_RESOURCE_PATH'] = resource_path
+        return env
+
+    def switch_world(self, world_file):
+        """Restart Gazebo with `world_file` (the world-agnostic ROS nodes stay
+        alive and reconnect to the repopulated /odom). The landmarks file is
+        cleared so the recovery replays only the new run."""
         self.stop_auto_run()
         try:
             if os.path.exists(self.yaml_file):
@@ -543,14 +570,12 @@ class DashboardNode(Node):
         except OSError:
             pass
 
-        subprocess.run(['pkill', '-9', '-f', 'ign gazebo'], check=False)
-        time.sleep(2.0)
-
+        self._kill_gazebo()
         world_path = os.path.join(self.worlds_dir, world_file)
         self.gz_proc = subprocess.Popen(
             ['ign', 'gazebo', '-r', world_path],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True)
+            start_new_session=True, env=self._gazebo_env())
         self.world = world_file
         ot.configure(world_file)
 

@@ -281,6 +281,18 @@ source install/setup.bash
 ./run_gazebo_demo.sh
 ```
 
+`./run_gazebo_demo.sh` prints a small menu so you can pick the world before
+launch:
+
+```
+  1) recovery_corridor.sdf  (demo corridor, 2 obstacles)
+  2) world_a_straight.sdf   (benchmark World A)
+  3) world_b_slalom.sdf     (benchmark World B)
+  4) world_c_scurve.sdf     (benchmark World C)
+```
+
+(You can also pass the world directly, e.g. `./run_gazebo_demo.sh world_b_slalom.sdf`.)
+
 To start with a different DREAM strategy, set `STRATEGY`:
 
 ```bash
@@ -302,14 +314,15 @@ at the robot's current position.
 The **`Benchmark Experiment (World A/B/C — open-loop profile)`** panel runs the
 manuscript benchmark worlds directly from the Dashboard:
 
-1. Launch with just `./run_gazebo_demo.sh` (no world argument needed).
-2. In the Dashboard pick **World A / B / C** and press
+1. Pick the world from the launch menu (or pass it as an argument).
+2. In the Dashboard pick the same **World A / B / C** and press
    **`Run benchmark (auto-cut → return)`**.
 
-The Dashboard then **restarts Gazebo with the selected world**, drives the same
-scripted open-loop `(v, ω)` profile used by `run_gazebo_benchmark.py`, auto-cuts
-the camera at the chosen 70–100% fraction, and returns to the start through the
-recovery controller — so you can watch the exact World A/B/C experiment live.
+The Dashboard drives the same scripted open-loop `(v, ω)` profile used by
+`run_gazebo_benchmark.py`, auto-cuts the camera at the chosen 70–100% fraction,
+and returns to the start through the recovery controller. If you select a
+different world in the Dashboard than the one loaded, it restarts Gazebo with
+that world (the ROS recovery nodes stay alive and reconnect automatically).
 
 Success indicator: the log shows `Dashboard GUI started.`, `rviz2`, and `ign gazebo`
 running; the topics `/odom_raw`, `/odom`, `/cmd_vel` appear.
