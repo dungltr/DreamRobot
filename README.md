@@ -190,11 +190,11 @@ python3 run_gazebo_benchmark.py --compare
 
 ```
 [A] ... N_baseline=18 N_dream=2  DR= 88.9%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
-[B] ... N_baseline=26 N_dream=3  DR= 88.5%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
-[C] ... N_baseline=32 N_dream=7  DR= 78.1%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
+[B] ... N_baseline=26 N_dream=7  DR= 73.1%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
+[C] ... N_baseline=32 N_dream=9  DR= 71.9%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
 ```
 
-Meaning: DREAM reduces the number of landmarks by 88.9% / 88.5% / 78.1% while the
+Meaning: DREAM reduces the number of landmarks by 88.9% / 73.1% / 71.9% while the
 **recovery error stays at 0.030 m** (same as baseline). This is the “Landmark count,
 data reduction, and closed-loop recovery error” table in the paper.
 
@@ -230,8 +230,8 @@ python3 benchmark_baselines_gazebo.py --mc
 block is `dream (R2_th=0.98)`. Compare with the “Offline baseline comparison” table in
 the paper:
 - World A: DREAM `N≈3.0`, `path_max≈0.006` (much smaller than Nyquist `0.206`).
-- World B: DREAM `N≈4.0`, `path_max≈0.190` (larger than the two-rate `0.150`, but far fewer landmarks).
-- World C: DREAM `N≈8.5`, `path_max≈0.113` (comparable to two-rate `0.129`).
+- World B: DREAM `N≈13.2`, `path_max≈0.058` (smaller than the two-rate `0.149`, with fewer landmarks).
+- World C: DREAM `N≈16.8`, `path_max≈0.088` (smaller than two-rate `0.129`).
 
 ---
 
@@ -316,7 +316,7 @@ then use a VNC client to connect to `machine_address:5900`.
 
 | Content in the paper | Check command | Number that must match |
 |---|---|---|
-| DR / recovery-error table (3 worlds) | `python3 run_gazebo_benchmark.py --compare` | DR `88.9/88.5/78.1%`, PE `0.030 m` |
+| DR / recovery-error table (3 worlds) | `python3 run_gazebo_benchmark.py --compare` | DR `88.9/73.1/71.9%`, PE `0.030 m` |
 | R²_th threshold sweep table | `python3 sweep_r2_threshold.py` | PE `0.030 m` (except `inf`) |
 | Theory table (c ≈ 0.0168) | `python3 dream_theory_check.py` | `c ~= 0.0168` |
 | Monte-Carlo table | `run_gazebo_benchmark.py --mc ...` | PE `0.030±0.000 m` |
