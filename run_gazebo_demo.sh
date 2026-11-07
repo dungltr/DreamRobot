@@ -69,15 +69,11 @@ To run the corridor demo:
 
 To run a manuscript benchmark (World A/B/C):
   1. Pick the world from the launch menu above (or pass it as an argument).
-  2. In the Dashboard pick the same world under "Benchmark Experiment
-     (World A/B/C)" and press "Run benchmark (auto-cut -> return)".
+  2. In the Dashboard press "Run benchmark (auto-cut -> return)" under
+     "Benchmark Experiment (open-loop profile)".
   3. The Dashboard drives the scripted open-loop (v, omega) profile (identical
      to run_gazebo_benchmark.py), auto-cuts the camera at the selected 70-100%,
      and the recovery controller returns the robot to the start.
-
-  If you select a different world in the Dashboard than the one loaded, the
-  Dashboard will restart Gazebo with that world (the ROS nodes stay alive and
-  reconnect automatically).
 =====================================================================
 EOF
 

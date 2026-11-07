@@ -36,15 +36,14 @@ Other controls:
   * auto camera cutoff at 70 / 80 / 90 / 100% of the forward distance
     (default 100%);
   * "Compute Position Error (PE %)" -> RM and PE (Equation 2);
-  * "Benchmark Experiment (World A/B/C)" -> restarts Gazebo with the selected
-    manuscript world, drives its scripted open-loop (v, omega) profile, then
+  * "Benchmark Experiment (open-loop profile)" -> drives the scripted
+    open-loop (v, omega) profile of the currently loaded benchmark world, then
     auto-cuts the camera and returns (same profiles as run_gazebo_benchmark.py).
 """
 
 import math
 import os
 import re
-import subprocess
 import sys
 import time
 import tkinter as tk
@@ -68,8 +67,7 @@ from std_msgs.msg import Bool, Int32, String
 
 import optimal_trajectory as ot
 from benchmark_profiles import (
-    PROFILES, PROFILE_WORLD, PROFILE_LABELS,
-    profile_duration, benchmark_key_for_world,
+    PROFILES, profile_duration, benchmark_key_for_world,
 )
 
 # ---------------------------------------------------------------------------
@@ -160,11 +158,6 @@ class DashboardNode(Node):
         self.auto_run = self.declare_parameter('auto_run', False).value
         self.world = self.declare_parameter('world', 'recovery_corridor.sdf').value
         self.strategy = self.declare_parameter('strategy', 'geometry').value
-        self.worlds_dir = self.declare_parameter(
-            'worlds_dir',
-            os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                         '..', 'worlds')
-        ).value
         ot.configure(self.world)
 
         self.odom_sub = self.create_subscription(Odometry, self.odom_topic, self.odom_cb, 10)
@@ -185,10 +178,8 @@ class DashboardNode(Node):
         self.forward_dist = 0.0
         self.recovery_dist = 0.0
         self.last_pos = None
-        self.odom_seen = False
         self.pe_computed = False
         self.pe_result = None
-        self.gz_proc = None           # Gazebo process we restarted (world switch)
 
         # Automatic camera-cutoff threshold (percentage of the forward path).
         self.failure_percent = 100      # 70 / 80 / 90 / 100
@@ -228,7 +219,6 @@ class DashboardNode(Node):
         self.w = msg.twist.twist.angular.z
         self.cur_x = p.x
         self.cur_y = p.y
-        self.odom_seen = True
 
         qx, qy, qz, qw = sanitize_quaternion(msg.pose.pose.orientation)
         self.cur_yaw = math.atan2(2.0 * (qw * qz + qx * qy),
@@ -526,83 +516,6 @@ class DashboardNode(Node):
         self.cmd_pub.publish(Twist())
 
     # ------------------------------------------------------------------ #
-    # Runtime world switch (restart Gazebo only; ROS recovery nodes stay up)
-    # ------------------------------------------------------------------ #
-    def _kill_gazebo(self):
-        """Terminate the running Gazebo gracefully.
-
-        The process is a Ruby wrapper whose executable name is ``ruby``, so a
-        plain ``pkill -x`` on the tool name does not match. We match the full
-        command line *anchored* at the start (``^ign gazebo``): this targets
-        only the Gazebo wrapper + server and never a shell/editor whose text
-        merely contains the words ``ign gazebo``. SIGTERM is sent first so the
-        GUI window closes cleanly instead of freezing as "not responding".
-        """
-        subprocess.run(['pkill', '-TERM', '-f', '^ign gazebo'], check=False)
-        time.sleep(2.0)
-        subprocess.run(['pkill', '-9', '-f', '^ign gazebo'], check=False)
-        time.sleep(1.0)
-
-    def _gazebo_env(self):
-        """Return an environment for the restarted Gazebo that carries the
-        same resource paths ros_gz_sim sets up at launch."""
-        env = dict(os.environ)
-        share = os.path.dirname(self.worlds_dir)   # .../share/vslam_recovery_core
-        parts = [
-            self.worlds_dir,
-            os.path.join(share, 'urdf'),
-            env.get('GZ_SIM_RESOURCE_PATH', ''),
-            env.get('IGN_GAZEBO_RESOURCE_PATH', ''),
-        ]
-        resource_path = os.pathsep.join(p for p in parts if p)
-        env['GZ_SIM_RESOURCE_PATH'] = resource_path
-        env['IGN_GAZEBO_RESOURCE_PATH'] = resource_path
-        return env
-
-    def switch_world(self, world_file):
-        """Restart Gazebo with `world_file` (the world-agnostic ROS nodes stay
-        alive and reconnect to the repopulated /odom). The landmarks file is
-        cleared so the recovery replays only the new run."""
-        self.stop_auto_run()
-        try:
-            if os.path.exists(self.yaml_file):
-                os.remove(self.yaml_file)
-        except OSError:
-            pass
-
-        self._kill_gazebo()
-        world_path = os.path.join(self.worlds_dir, world_file)
-        self.gz_proc = subprocess.Popen(
-            ['ign', 'gazebo', '-r', world_path],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True, env=self._gazebo_env())
-        self.world = world_file
-        ot.configure(world_file)
-
-        # Reset the odometry bookkeeping so the new spawn does not register as
-        # a giant distance jump.
-        self.last_pos = None
-        self.odom_seen = False
-        self.cur_x = 0.0
-        self.cur_y = 0.0
-        self.forward_dist = 0.0
-        self.recovery_dist = 0.0
-        self.state = 'forward'
-        self.failure_fired = False
-        self.pe_computed = False
-        self.get_logger().info(f'Switched to world {world_file}.')
-
-    def shutdown(self):
-        """Stop any motion and kill a Gazebo process we restarted."""
-        self.stop_auto_run()
-        if self.gz_proc is not None:
-            try:
-                os.killpg(os.getpgid(self.gz_proc.pid), 9)
-            except Exception:
-                pass
-            self.gz_proc = None
-
-    # ------------------------------------------------------------------ #
     # Manual teleop
     # ------------------------------------------------------------------ #
     def manual_move(self, linear_x, angular_z):
@@ -791,24 +704,16 @@ class DashboardApp:
         tk.Button(actions, text='Compute Position Error (PE %)',
                   command=self.on_calculate_error, height=1).pack(fill='x', pady=3)
 
-        # ---- [2b] Benchmark experiment (World A/B/C) ---------------------- #
+        # ---- [2b] Benchmark experiment (open-loop profile) --------------- #
         bench = tk.LabelFrame(
             self.scrollable_frame,
-            text='Benchmark Experiment (World A/B/C — open-loop profile)')
+            text='Benchmark Experiment (open-loop profile)')
         bench.pack(fill='x', padx=10, pady=4)
 
-        loaded_key = benchmark_key_for_world(self.node.world)
-        self.bench_var = tk.StringVar(value=(loaded_key or 'A'))
         self.lbl_world = tk.Label(
             bench, text=f'Loaded world: {self.node.world.rsplit("/", 1)[-1]}',
             fg='#777777')
         self.lbl_world.pack(anchor='w', padx=6, pady=(2, 0))
-
-        for key in ('A', 'B', 'C'):
-            tk.Radiobutton(
-                bench, text=PROFILE_LABELS[key], value=key,
-                variable=self.bench_var, command=self.on_select_benchmark
-            ).pack(anchor='w', padx=6)
 
         tk.Button(bench, text='▶ Run benchmark (auto-cut → return)',
                   command=self.on_run_benchmark, height=1,
@@ -909,27 +814,15 @@ class DashboardApp:
         self.node.strategy_pub.publish(String(data=nxt))
         self.btn_strategy.config(text=f'DREAM Strategy: {nxt}')
 
-    def on_select_benchmark(self):
-        # The radio buttons choose which benchmark world to run. The Run
-        # button switches Gazebo to that world (if needed) before driving.
-        pass
-
     def on_run_benchmark(self):
-        key = self.bench_var.get()
-        target_world = PROFILE_WORLD[key]
-        loaded = self.node.world.rsplit('/', 1)[-1]
-        if loaded != target_world:
-            # Restart Gazebo with the selected world, then drive its profile
-            # once the new odometry stream is up.
-            self.node.switch_world(target_world)
-            self.lbl_world.config(
-                text=f'Loaded world: {target_world} (starting…)')
-            self.root.after(12000, lambda k=key: self._start_benchmark_after_switch(k))
-        else:
-            self.node.start_benchmark(key)
-
-    def _start_benchmark_after_switch(self, key):
-        self.lbl_world.config(text=f'Loaded world: {PROFILE_WORLD[key]}')
+        """Drive the open-loop profile of the currently loaded world."""
+        key = benchmark_key_for_world(self.node.world)
+        if key is None:
+            messagebox.showinfo(
+                'No benchmark profile',
+                'The loaded world has no open-loop benchmark profile. '
+                'Use the 4 Autonomous Modes for the corridor demo.')
+            return
         self.node.start_benchmark(key)
 
     def on_fail_percent(self, pct):
@@ -952,7 +845,7 @@ class DashboardApp:
         messagebox.showinfo('Position Error (Equation 2)', text)
 
     def on_close(self):
-        self.node.shutdown()
+        self.node.stop_auto_run()
         self.root.destroy()
 
     # ------------------------------------------------------------------ #

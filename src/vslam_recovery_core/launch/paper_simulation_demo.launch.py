@@ -248,7 +248,6 @@ def generate_launch_description():
             'auto_run': auto_run,
             'world': world,
             'strategy': strategy,
-            'worlds_dir': os.path.join(pkg_share, 'worlds'),
         }],
     )
 
