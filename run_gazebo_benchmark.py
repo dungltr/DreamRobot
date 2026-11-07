@@ -63,14 +63,14 @@ WORLDS = [
 # The cos()/piecewise profiles weave symmetrically so the robot returns near
 # the corridor centre (net heading ~ 0) rather than drifting to a wall.
 PROFILES = {
-    # A: straight hallway (max compression).
+    # A: straight hallway (max compression). 0.20 m/s x 20 s = 4.0 m.
     "A": [(0.20, 0.0, 20.0)],
-    # B: obstacle slalom (alternating left/right turns).
-    "B": [(0.15, 0.0, 1.0), (0.15, 0.5, 2.5), (0.15, -0.5, 2.5),
-          (0.15, 0.5, 2.5), (0.15, -0.5, 2.5), (0.15, 0.0, 2.0)],
-    # C: long gentle S-curve.
+    # B: obstacle slalom (gentle alternating turns) + straight tail, ~4 m.
+    "B": [(0.15, 0.0, 1.0), (0.15, 0.3, 2.5), (0.15, -0.3, 2.5),
+          (0.15, 0.3, 2.5), (0.15, -0.3, 2.5), (0.15, 0.0, 16.0)],
+    # C: gentle S-curve + straight tail, ~4 m.
     "C": [(0.12, 0.0, 2.0), (0.12, 0.2, 5.0), (0.12, -0.2, 5.0),
-          (0.12, 0.0, 3.0)],
+          (0.12, 0.0, 21.33)],
 }
 
 DRIVE_FREQ = 20.0       # Hz cmd_vel publishing
