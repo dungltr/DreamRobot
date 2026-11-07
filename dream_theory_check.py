@@ -84,7 +84,8 @@ def main():
         consts.append(c)
         print(f"{kW:>9.3f} | {lin:>10.6f} | {gap:>10.6f} | {c:>16.5f}")
     print("-" * 74)
-    print(f"c ~= {sum(consts[2:])/len(consts[2:]):.5f}  (averaged over kW >= 0.4)")
+    print(f"finite-sample c ~= {sum(consts[2:])/len(consts[2:]):.5f}  (averaged over kW >= 0.4);")
+    print("analytic limit (continuous uniform arc): c = 1/60 ~= 0.016667")
 
     print("\n(2) chord deviation delta vs kappa*W^2/8")
     print("-" * 74)
@@ -96,10 +97,10 @@ def main():
         print(f"{kappa:>7.2f} | {W:>7.2f} | {d:>9.5f} | {approx:>12.5f}")
     print("-" * 74)
 
-    print("\nImplication: a linearity threshold ~= 1 - c*(kappa*W)^2 implies")
-    print("  kappa*W <= sqrt((1 - threshold)/c), hence per-segment error")
-    print("  delta <= W * sqrt((1 - threshold)/c) / 8, i.e. the threshold")
-    print("  bounds the reconstruction error of every segment uniformly.")
+    print("\nImplication: a linearity threshold ~= 1 - (kappa*W)^2/60 implies")
+    print("  kappa*W <= sqrt(60*(1 - threshold)), hence a per-segment error")
+    print("  delta <= W * sqrt(60*(1 - threshold)) / 8, a local estimate")
+    print("  that scales with the segment length W (not a uniform bound).")
     return 0
 
 
