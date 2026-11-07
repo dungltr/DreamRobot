@@ -761,7 +761,7 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
         fwd_b, fwd_d, both_b, both_d = [], [], [], []
         r2_ns, db_ns = [], []
         for run in range(runs):
-            rng = random.Random(7000 + run)
+            rng = random.Random(5000 + run)
             p = reconstruct_noisy(raw, sigma_v, sigma_w, rng)
             b = baseline_sampler(p)
             d = dream_sampler(p)
@@ -769,9 +769,9 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
                                         vel_threshold=vel_th)
             fwd_b.append(recovery_pe_closed_loop(p, b))
             fwd_d.append(recovery_pe_closed_loop(p, d))
-            r1 = random.Random(7000 + run)
+            r1 = random.Random(5000 + run)
             both_b.append(recovery_pe_closed_loop_noisy(p, b, sigma_v, sigma_w, r1))
-            r1 = random.Random(7000 + run)
+            r1 = random.Random(5000 + run)
             both_d.append(recovery_pe_closed_loop_noisy(p, d, sigma_v, sigma_w, r1))
             r2_ns.append(len(d))
             db_ns.append(len(db))
