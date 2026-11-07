@@ -37,9 +37,11 @@ import argparse
 import csv
 import math
 import os
+import re
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 # ---------------------------------------------------------------------------
@@ -112,10 +114,36 @@ def _kill(proc):
         pass
 
 
+def make_headless_world(src_path, dst):
+    """Strip the camera/IMU sensor plugins so Gazebo runs at a stable real-time
+    factor (the odometry does not depend on the camera)."""
+    with open(src_path) as fh:
+        src = fh.read()
+    src = re.sub(
+        r'\s*<plugin filename="ignition-gazebo-sensors-system".*?</plugin>\n',
+        '\n', src, flags=re.S)
+    src = re.sub(r'\s*<sensor[^>]*>.*?</sensor>\n', '\n', src, flags=re.S)
+    src = re.sub(
+        r'\s*<plugin filename="ignition-gazebo-imu-system".*?</plugin>\n',
+        '\n', src, flags=re.S)
+    with open(dst, "w") as fh:
+        fh.write(src)
+
+
 def record_world(world, name, segments, node):
-    """Drive the robot in `world` and return the recorded raw odometry list."""
-    gz = _start_proc(["ign", "gazebo", "-s", "-r",
-                      os.path.join(_WORLDS_DIR, world)])
+    """Drive the robot in `world` and return the recorded raw odometry list.
+
+    The camera sensor is stripped (it is irrelevant to the odometry but forces
+    OGRE rendering, which lowers the real-time factor and makes the recorded
+    trajectory length machine-dependent), and each segment is driven for `dur`
+    seconds of *simulation* time (measured from the odometry timestamps) so the
+    recording is deterministic regardless of the real-time factor.
+    """
+    headless_dir = tempfile.mkdtemp(prefix="dream_bench_")
+    headless_world = os.path.join(headless_dir, world)
+    make_headless_world(os.path.join(_WORLDS_DIR, world), headless_world)
+
+    gz = _start_proc(["ign", "gazebo", "-s", "-r", headless_world])
     bridge = _start_proc(["ros2", "run", "ros_gz_bridge", "parameter_bridge",
                           "--ros-args", "-p", f"config_file:={_BRIDGE_CFG}"])
 
@@ -126,8 +154,12 @@ def record_world(world, name, segments, node):
 
         node.clear_odom()
         for v, w, dur in segments:
-            t0 = time.time()
-            while time.time() - t0 < dur:
+            start = node.latest_time()
+            while start is None:
+                node.publish_cmd_vel(v, w)
+                _spin(node, 1.0 / DRIVE_FREQ)
+                start = node.latest_time()
+            while node.latest_time() - start < dur:
                 node.publish_cmd_vel(v, w)
                 _spin(node, 1.0 / DRIVE_FREQ)
         node.publish_cmd_vel(0.0, 0.0)
@@ -197,6 +229,10 @@ def _ensure_ros():
 
         def get_odom(self):
             return list(self._odom)
+
+        def latest_time(self):
+            """Simulation time of the most recent odometry sample (or None)."""
+            return self._odom[-1][0] if self._odom else None
 
         def publish_cmd_vel(self, v, w):
             m = Twist()

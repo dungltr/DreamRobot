@@ -190,11 +190,11 @@ python3 run_gazebo_benchmark.py --compare
 
 ```
 [A] ... N_baseline=18 N_dream=2  DR= 88.9%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
-[B] ... N_baseline=10 N_dream=6  DR= 40.0%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
-[C] ... N_baseline=12 N_dream=7  DR= 41.7%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
+[B] ... N_baseline=13 N_dream=8  DR= 38.5%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
+[C] ... N_baseline=14 N_dream=3  DR= 78.6%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
 ```
 
-Meaning: DREAM reduces the number of landmarks by 88.9% / 40.0% / 41.7% while the
+Meaning: DREAM reduces the number of landmarks by 88.9% / 38.5% / 78.6% while the
 **recovery error stays at 0.030 m** (same as baseline). This is the “Landmark count,
 data reduction, and closed-loop recovery error” table in the paper.
 
@@ -230,8 +230,8 @@ python3 benchmark_baselines_gazebo.py --mc
 block is `dream (R2_th=0.98)`. Compare with the “Offline baseline comparison” table in
 the paper:
 - World A: DREAM `N≈3.0`, `path_max≈0.006` (much smaller than Nyquist `0.206`).
-- World B: DREAM `N≈13.9`, `path_max≈0.069` (smaller than Nyquist `0.142`).
-- World C: DREAM `N≈8.5`, `path_max≈0.130` (around Nyquist `0.116`, but fewer landmarks).
+- World B: DREAM `N≈24.0`, `path_max≈0.055` (smaller than Nyquist `0.150`).
+- World C: DREAM `N≈5.7`, `path_max≈0.101` (smaller than Nyquist `0.129`).
 
 ---
 
@@ -250,10 +250,10 @@ python3 run_headless_auto_test.py
 **Expected result** (4 `PASS` lines):
 
 ```
-Mode 1: PASS  final_err=0.060 m  wall=0.267 m  obst=0.293 m  coll=None
+Mode 1: PASS  final_err=0.060 m  wall=0.269 m  obst=0.293 m  coll=None
 Mode 2: PASS  final_err=0.060 m  wall=0.273 m  obst=0.300 m  coll=None
-Mode 3: PASS  final_err=0.060 m  wall=0.309 m  obst=0.205 m  coll=None
-Mode 4: PASS  final_err=0.060 m  wall=0.310 m  obst=0.214 m  coll=None
+Mode 3: PASS  final_err=0.060 m  wall=0.282 m  obst=0.239 m  coll=None
+Mode 4: PASS  final_err=0.060 m  wall=0.282 m  obst=0.251 m  coll=None
 ```
 
 > To run faster (one mode only), add `--mode 4` to the end of the command.
@@ -309,7 +309,7 @@ then use a VNC client to connect to `machine_address:5900`.
 
 | Content in the paper | Check command | Number that must match |
 |---|---|---|
-| DR / recovery-error table (3 worlds) | `python3 run_gazebo_benchmark.py --compare` | DR `88.9/40.0/41.7%`, PE `0.030 m` |
+| DR / recovery-error table (3 worlds) | `python3 run_gazebo_benchmark.py --compare` | DR `88.9/38.5/78.6%`, PE `0.030 m` |
 | R²_th threshold sweep table | `python3 sweep_r2_threshold.py` | PE `0.030 m` (except `inf`) |
 | Theory table (c ≈ 0.0168) | `python3 dream_theory_check.py` | `c ~= 0.0168` |
 | Monte-Carlo table | `run_gazebo_benchmark.py --mc ...` | PE `0.030±0.000 m` |
