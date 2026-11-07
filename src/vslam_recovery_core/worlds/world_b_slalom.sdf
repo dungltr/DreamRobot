@@ -6,7 +6,7 @@
   experimental setup of the paper (Section 5, 5.1; Figures 10/12/13; Tables
   III/V/VI):
 
-    * corridor width  = 1.7 m (walls at y = +/-0.85 m);
+    * corridor width  = 2.2 m (walls at y = +/-1.10 m);
     * corridor length = 15 m  (supports the 2.6 m .. 13.2 m tests of Table VI);
     * two parallel yellow guide lines for the robot to follow the centre axis;
     * two staggered cylindrical obstacles (r = 0.2 m, h = 0.6 m):
@@ -86,10 +86,10 @@
       </link>
     </model>
 
-    <!-- Corridor walls: 15 m long, 1.7 m wide (y = +/-0.85) -->
+    <!-- Corridor walls: 15 m long, 2.2 m wide (y = +/-1.10) -->
     <model name="left_wall">
       <static>true</static>
-      <pose>7.5 0.9 0.2 0 0 0</pose>
+      <pose>7.5 1.15 0.2 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>15.0 0.1 0.4</size></box></geometry>
@@ -106,7 +106,7 @@
 
     <model name="right_wall">
       <static>true</static>
-      <pose>7.5 -0.9 0.2 0 0 0</pose>
+      <pose>7.5 -1.15 0.2 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>15.0 0.1 0.4</size></box></geometry>

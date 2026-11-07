@@ -34,7 +34,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import run_gazebo_benchmark as rb  # noqa: E402
 
-WALL_HALF = 0.85  # inner face of the corridor wall (box centre 0.9, half-thickness 0.05)
+WALL_HALF = 1.10  # inner face of the corridor wall (box centre 1.15, half-thickness 0.05)
 OBSTACLES = {
     "A": [],
     "B": [(1.5, 0.3), (3.0, -0.3), (4.5, 0.3), (6.0, -0.3)],
