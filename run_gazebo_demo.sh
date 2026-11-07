@@ -36,12 +36,20 @@ How to monitor (match the paper):
   2. RViz       — green = forward path, red = recovery path.
   3. Dashboard  — 'Path landmarks recorded' = landmarks recorded by DREAM.
 
-To run the experiment:
+To run the corridor demo:
   1. In the Dashboard press "Auto 4" (continuous curve following).
   2. Watch the landmark count grow (sparse on straights, dense at turns).
   3. Press "CUT CAMERA SIGNAL (Trigger Failure)" -> the robot turns pi and
      replays the recorded path in reverse.
   4. Press "Compute Position Error (PE %)" to read the return position error.
+
+To run a manuscript benchmark (World A/B/C) from the GUI:
+  1. Launch the matching world, e.g. ./run_gazebo_demo.sh world_b_slalom.sdf
+  2. In the Dashboard pick the world under "Benchmark Experiment
+     (World A/B/C)" and press "Run benchmark (auto-cut -> return)".
+  3. The robot drives the scripted open-loop (v, omega) profile (identical to
+     run_gazebo_benchmark.py), auto-cuts the camera at the selected 70-100%,
+     and the recovery controller returns it to the start.
 =====================================================================
 EOF
 

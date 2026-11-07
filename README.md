@@ -299,6 +299,20 @@ percentage, the camera fails and the robot returns from that pose. Pressing
 **`CUT CAMERA SIGNAL NOW (return from this pose)`** cuts the camera immediately
 at the robot's current position.
 
+The **`Benchmark Experiment (World A/B/C — open-loop profile)`** panel runs the
+manuscript benchmark worlds directly from the Dashboard:
+
+1. Launch the matching world first:
+   `./run_gazebo_demo.sh world_a_straight.sdf` (A), `world_b_slalom.sdf` (B),
+   or `world_c_scurve.sdf` (C).
+2. In the Dashboard pick the world and press **`Run benchmark (auto-cut → return)`**.
+
+The robot then drives the same scripted open-loop `(v, ω)` profile used by
+`run_gazebo_benchmark.py`, auto-cuts the camera at the chosen 70–100% fraction,
+and returns to the start through the recovery controller — so you can watch the
+exact World A/B/C experiment live. A pop-up warns you if the selected world does
+not match the loaded Gazebo world.
+
 Success indicator: the log shows `Dashboard GUI started.`, `rviz2`, and `ign gazebo`
 running; the topics `/odom_raw`, `/odom`, `/cmd_vel` appear.
 

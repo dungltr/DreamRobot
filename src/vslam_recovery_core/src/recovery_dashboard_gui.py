@@ -35,7 +35,10 @@ Other controls:
   * "CUT CAMERA SIGNAL NOW (return from this pose)" -> /camera_failure_trigger;
   * auto camera cutoff at 70 / 80 / 90 / 100% of the forward distance
     (default 100%);
-  * "Compute Position Error (PE %)" -> RM and PE (Equation 2).
+  * "Compute Position Error (PE %)" -> RM and PE (Equation 2);
+  * "Benchmark Experiment (World A/B/C)" -> drives the scripted open-loop
+    (v, omega) profile of the selected manuscript world, then auto-cuts the
+    camera and returns (same profiles as run_gazebo_benchmark.py).
 """
 
 import math
@@ -63,6 +66,10 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import Bool, Int32, String
 
 import optimal_trajectory as ot
+from benchmark_profiles import (
+    PROFILES, PROFILE_WORLD, PROFILE_LABELS,
+    profile_duration, benchmark_key_for_world,
+)
 
 # ---------------------------------------------------------------------------
 # Waypoints for the segmented turn-then-drive modes (Features 1 and 2).
@@ -78,6 +85,7 @@ WAYPOINTS = [
 ]
 
 AUTO_CONTROL_RATE = 20.0       # Hz
+BENCHMARK_DRIVE_FREQ = 20.0   # Hz, open-loop profile publishing
 AUTO_WP_TOLERANCE = 0.10       # m
 AUTO_FINAL_TOLERANCE = 0.05    # m
 
@@ -187,6 +195,13 @@ class DashboardNode(Node):
         self.auto_last_v = 0.0
         self.auto_last_w = 0.0
 
+        # Benchmark experiment state (open-loop World A/B/C profiles).
+        self.benchmark_active = False
+        self.benchmark_timer = None
+        self.benchmark_key = None
+        self.benchmark_segments = []
+        self.benchmark_start = None
+
         self.get_logger().info(f"Dashboard node ready. yaml_file='{self.yaml_file}'")
 
     # ------------------------------------------------------------------ #
@@ -275,6 +290,7 @@ class DashboardNode(Node):
         self.get_logger().info(f'Auto run mode {mode} started.')
 
     def stop_auto_run(self):
+        stopped = False
         if self.auto_active or self.auto_timer is not None:
             self.auto_active = False
             if self.auto_timer is not None:
@@ -282,8 +298,16 @@ class DashboardNode(Node):
                 self.auto_timer = None
             self.auto_last_v = 0.0
             self.auto_last_w = 0.0
+            stopped = True
+        if self.benchmark_active or self.benchmark_timer is not None:
+            self.benchmark_active = False
+            if self.benchmark_timer is not None:
+                self.benchmark_timer.cancel()
+                self.benchmark_timer = None
+            stopped = True
+        if stopped:
             self.cmd_pub.publish(Twist())
-            self.get_logger().info('Auto run stopped.')
+            self.get_logger().info('Auto/benchmark run stopped.')
 
     def emergency_stop(self):
         self.stop_auto_run()
@@ -420,6 +444,74 @@ class DashboardNode(Node):
         w_des = clamp(w_des, -MAX_ANGULAR_VELOCITY, MAX_ANGULAR_VELOCITY)
 
         return v_des, w_des
+
+    # ------------------------------------------------------------------ #
+    # Benchmark experiment (open-loop World A/B/C profiles)
+    # ------------------------------------------------------------------ #
+    def start_benchmark(self, key):
+        """Drive the scripted open-loop profile for benchmark World A/B/C,
+        then cut the camera at the configured percentage (default 100%) and
+        hand control to the recovery controller."""
+        if key not in PROFILES:
+            self.get_logger().error(f'Unknown benchmark world {key!r}.')
+            return
+        self.stop_auto_run()
+        self.benchmark_key = key
+        self.benchmark_segments = list(PROFILES[key])
+        self.benchmark_start = self.get_clock().now()
+        self.benchmark_active = True
+        # Fresh run from the origin: reset travelled distance and re-arm the
+        # automatic camera cutoff, mirroring start_auto_run().
+        self.state = 'forward'
+        self.forward_dist = 0.0
+        self.recovery_dist = 0.0
+        self.failure_fired = False
+        self.pe_computed = False
+        if self.benchmark_timer is None:
+            self.benchmark_timer = self.create_timer(
+                1.0 / BENCHMARK_DRIVE_FREQ, self.benchmark_tick)
+        self.get_logger().info(
+            f'Benchmark run {key} started '
+            f'({len(self.benchmark_segments)} segments).')
+
+    def benchmark_tick(self):
+        if not self.benchmark_active:
+            return
+        elapsed = (self.get_clock().now()
+                   - self.benchmark_start).nanoseconds * 1e-9
+        total = profile_duration(self.benchmark_key)
+
+        # Camera auto-cutoff at the selected fraction of the nominal profile.
+        if elapsed >= (self.failure_percent / 100.0) * total:
+            self.stop_benchmark()
+            if not self.failure_fired and self.state == 'forward':
+                self.failure_fired = True
+                self.get_logger().info(
+                    f'Benchmark camera cutoff at {self.failure_percent}% '
+                    f'(t={elapsed:.2f} s).')
+                self.trigger_failure()
+            return
+
+        # Select the current (v, w) segment by cumulative duration.
+        acc = 0.0
+        v = w = 0.0
+        for seg_v, seg_w, seg_dur in self.benchmark_segments:
+            if elapsed < acc + seg_dur:
+                v, w = seg_v, seg_w
+                break
+            acc += seg_dur
+
+        twist = Twist()
+        twist.linear.x = v
+        twist.angular.z = w
+        self.cmd_pub.publish(twist)
+
+    def stop_benchmark(self):
+        self.benchmark_active = False
+        if self.benchmark_timer is not None:
+            self.benchmark_timer.cancel()
+            self.benchmark_timer = None
+        self.cmd_pub.publish(Twist())
 
     # ------------------------------------------------------------------ #
     # Manual teleop
@@ -582,6 +674,29 @@ class DashboardApp:
                   height=2, bg='#c62828', fg='white',
                   font=('TkDefaultFont', 12, 'bold')).pack(fill='x', pady=(4, 2))
 
+        # ---- [2b] Benchmark experiment (World A/B/C) ---------------------- #
+        bench = tk.LabelFrame(
+            self.scrollable_frame,
+            text='Benchmark Experiment (World A/B/C — open-loop profile)')
+        bench.pack(fill='x', padx=10, pady=4)
+
+        loaded_key = benchmark_key_for_world(self.node.world)
+        self.bench_var = tk.StringVar(value=(loaded_key or 'A'))
+        self.lbl_world = tk.Label(
+            bench, text=f'Loaded world: {self.node.world.rsplit("/", 1)[-1]}',
+            fg='#777777')
+        self.lbl_world.pack(anchor='w', padx=6, pady=(2, 0))
+
+        for key in ('A', 'B', 'C'):
+            tk.Radiobutton(
+                bench, text=PROFILE_LABELS[key], value=key,
+                variable=self.bench_var, command=self.on_select_benchmark
+            ).pack(anchor='w', padx=6)
+
+        tk.Button(bench, text='▶ Run benchmark (auto-cut → return)',
+                  command=self.on_run_benchmark, height=1,
+                  bg='#37474f', fg='white').pack(fill='x', pady=(4, 2))
+
         # ---- [3] Manual teleop -------------------------------------------- #
         teleop = tk.LabelFrame(self.scrollable_frame, text='Manual Teleop')
         teleop.pack(fill='x', padx=10, pady=4)
@@ -715,6 +830,26 @@ class DashboardApp:
         self.node.strategy = nxt
         self.node.strategy_pub.publish(String(data=nxt))
         self.btn_strategy.config(text=f'DREAM Strategy: {nxt}')
+
+    def on_select_benchmark(self):
+        # The radio buttons only choose which profile the Run button drives;
+        # the loaded Gazebo world is fixed at launch time.
+        pass
+
+    def on_run_benchmark(self):
+        key = self.bench_var.get()
+        loaded_key = benchmark_key_for_world(self.node.world)
+        if loaded_key != key:
+            want = PROFILE_WORLD[key]
+            have = self.node.world.rsplit('/', 1)[-1]
+            proceed = messagebox.askyesno(
+                'World mismatch',
+                f'You selected {PROFILE_LABELS[key]}, but the loaded world is '
+                f'{have}.\n\nThis profile is meant for {want}. Relaunch with:\n'
+                f'    ./run_gazebo_demo.sh {want}\n\nRun anyway?')
+            if not proceed:
+                return
+        self.node.start_benchmark(key)
 
     def on_fail_percent(self, pct):
         """Apply the chosen automatic camera-cutoff percentage."""

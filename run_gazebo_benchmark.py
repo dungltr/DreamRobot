@@ -53,33 +53,16 @@ _BRIDGE_CFG = os.path.join(_WS, "src", "vslam_recovery_core", "config",
                            "bridge_config.yaml")
 _DATA_DIR = os.path.join(_WS, "bench_data")
 
+# Scripted open-loop velocity profiles shared with the live GUI dashboard, so
+# the monitored run and the reported benchmark drive the robot identically.
+sys.path.insert(0, os.path.join(_WS, "src", "vslam_recovery_core", "src"))
+from benchmark_profiles import PROFILES  # noqa: E402
+
 WORLDS = [
     ("A", "world_a_straight.sdf"),
     ("B", "world_b_slalom.sdf"),
     ("C", "world_c_scurve.sdf"),
 ]
-
-# Scripted velocity profiles: list of (v, w, duration_s) segments.
-# The cos()/piecewise profiles weave symmetrically so the robot returns near
-# the corridor centre (net heading ~ 0) rather than drifting to a wall.
-PROFILES = {
-    # A: straight hallway (max compression). 0.20 m/s x 20 s = 4.0 m.
-    "A": [(0.20, 0.0, 20.0)],
-    # B: pure obstacle slalom (alternating sharp turns, no straight tail), ~4 m.
-    "B": [(0.15, 0.0, 1.0),
-          (0.15, 0.45, 2.5), (0.15, -0.45, 2.5),
-          (0.15, 0.45, 2.5), (0.15, -0.45, 2.5),
-          (0.15, 0.45, 2.5), (0.15, -0.45, 2.5),
-          (0.15, 0.45, 2.5), (0.15, -0.45, 2.5),
-          (0.15, 0.45, 2.5), (0.15, -0.45, 2.5),
-          (0.15, 0.0, 0.5)],
-    # C: pure gentle S-curve (alternating gentle waves, no straight tail), ~4 m.
-    "C": [(0.12, 0.0, 2.0),
-          (0.12, 0.25, 5.0), (0.12, -0.25, 5.0),
-          (0.12, 0.25, 5.0), (0.12, -0.25, 5.0),
-          (0.12, 0.25, 5.0), (0.12, -0.25, 5.0),
-          (0.12, 0.0, 1.0)],
-}
 
 DRIVE_FREQ = 20.0       # Hz cmd_vel publishing
 STARTUP_WAIT = 12.0     # s to wait for Gazebo + bridge

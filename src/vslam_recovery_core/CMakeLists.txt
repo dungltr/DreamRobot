@@ -72,6 +72,7 @@ install(PROGRAMS
   src/optimal_trajectory.py
   src/dream_sampler_node.py
   src/dream_core.py
+  src/benchmark_profiles.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
