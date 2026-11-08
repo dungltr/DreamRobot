@@ -620,6 +620,90 @@ def recovery_pe_closed_loop_noisy(recon, landmarks_idx, sigma_v, sigma_w, rng):
     return math.hypot(x, y)
 
 
+def recovery_pe_closed_loop_noisy_2state(true_recon, est_recon, landmarks_idx,
+                                         sigma_v, sigma_w, rng):
+    """Two-state closed-loop reverse replay that *retains* the forward-phase
+    drift. The true pose follows the recorded (clean) forward trajectory and
+    starts the return at its true forward endpoint; the dead-reckoned estimate
+    follows the noise-integrated forward trajectory and starts the return at
+    its drifted endpoint (the two are NOT collapsed at camera loss). Waypoints
+    are the estimate positions at the landmark indices (odometry-only), and the
+    return path is built in the estimate frame. Returns the true final distance
+    to the origin."""
+    if len(landmarks_idx) < 2:
+        return float("inf")
+
+    forward = [(est_recon[i][1], est_recon[i][2]) for i in landmarks_idx]
+
+    x = true_recon[-1][1]
+    y = true_recon[-1][2]
+    yaw = true_recon[-1][3]
+    x_est = est_recon[-1][1]
+    y_est = est_recon[-1][2]
+    yaw_est = est_recon[-1][3]
+
+    dt = 1.0 / 50.0
+    kBaseSpeed = 0.12
+    kLookahead = 0.45
+    kFinalTolerance = 0.03
+
+    # Pi-turn (closed-loop on the estimated heading).
+    target = _norm_angle(yaw_est + math.pi)
+    rt = 0.0
+    while rt < 12.0:
+        err = _norm_angle(target - yaw_est)
+        if abs(err) < 0.03:
+            break
+        w = _clamp(2.0 * err, -0.8, 0.8)
+        yaw = _norm_angle(yaw + w * dt)
+        yaw_est = _norm_angle(yaw_est + (w + sigma_w * rng.gauss(0.0, 1.0)) * dt)
+        rt += dt
+
+    path = [(x_est, y_est)] + list(reversed(forward))
+    if math.hypot(path[-1][0], path[-1][1]) > 1e-3:
+        path.append((0.0, 0.0))
+    samples = _polyline_samples(path)
+
+    last_v = 0.0
+    last_w = 0.0
+    t = 0.0
+    while t < 180.0:
+        dstart_est = math.hypot(x_est, y_est)
+        if dstart_est < kFinalTolerance:
+            break
+        gx, gy = _lookahead_goal(x_est, y_est, samples, kLookahead)
+        alpha = _norm_angle(math.atan2(gy - y_est, gx - x_est) - yaw_est)
+
+        v_des = kBaseSpeed * max(0.0, math.cos(alpha))
+        approach = _clamp(dstart_est / 0.4, 0.0, 1.0)
+        v_des = min(v_des, max(0.02, kBaseSpeed * approach))
+
+        w_des = 2.0 * v_des * math.sin(alpha) / max(kLookahead, 1e-3)
+        w_des = _clamp(w_des, -0.25, 0.25)
+
+        v = _slew(last_v, v_des, 0.20 * dt)
+        w = _slew(last_w, w_des, 0.50 * dt)
+        last_v = v
+        last_w = w
+        v = max(0.0, v)
+        w = _clamp(w, -0.25, 0.25)
+
+        # True pose integrates the commanded velocities.
+        x += v * math.cos(yaw) * dt
+        y += v * math.sin(yaw) * dt
+        yaw = _norm_angle(yaw + w * dt)
+
+        # Odometry estimate integrates noisy velocities (dead-reckoning drift).
+        vn = v + sigma_v * rng.gauss(0.0, 1.0)
+        wn = w + sigma_w * rng.gauss(0.0, 1.0)
+        x_est += vn * math.cos(yaw_est) * dt
+        y_est += vn * math.sin(yaw_est) * dt
+        yaw_est = _norm_angle(yaw_est + wn * dt)
+
+        t += dt
+    return math.hypot(x, y)
+
+
 # ---------------------------------------------------------------------------
 # Monte-Carlo + ablation (offline, on the recorded CSVs)
 # ---------------------------------------------------------------------------
@@ -763,8 +847,10 @@ def compare(csv_path, name):
 def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
                          vel_th=0.30):
     """Two experiments:
-      (M1) return-phase odometry noise: the closed-loop replay integrates a
-           dead-reckoned estimate, so the same noise affects the RETURN phase;
+      (M1) two-state forward-and-return odometry noise: the true pose follows
+           the clean recorded trajectory and the dead-reckoned estimate follows
+           the noise-integrated trajectory through BOTH phases, so the
+           forward-phase drift is retained at camera loss (not collapsed);
       (M2) a noise-robust speed channel: replace s(t)-R^2 with a velocity
            deadband and compare landmark counts under the same noise.
     Prints mean +/- 95% CI tables for the three worlds."""
@@ -779,23 +865,31 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
             for row in csv.reader(fh):
                 if row:
                     raw.append(tuple(float(v) for v in row))
-        recon = reconstruct(raw)
-        n_base = len(baseline_sampler(recon))
+        true_recon = reconstruct(raw)
+        n_base = len(baseline_sampler(true_recon))
         fwd_b, fwd_d, both_b, both_d = [], [], [], []
+        drifts = []
         r2_ns, db_ns = [], []
         for run in range(runs):
             rng = random.Random(5000 + run)
-            p = reconstruct_noisy(raw, sigma_v, sigma_w, rng)
-            b = baseline_sampler(p)
-            d = dream_sampler(p)
-            db = dream_sampler_deadband(p, path_threshold=path_th,
+            est = reconstruct_noisy(raw, sigma_v, sigma_w, rng)
+            b = baseline_sampler(est)
+            d = dream_sampler(est)
+            db = dream_sampler_deadband(est, path_threshold=path_th,
                                         vel_threshold=vel_th)
-            fwd_b.append(recovery_pe_closed_loop(p, b))
-            fwd_d.append(recovery_pe_closed_loop(p, d))
+            # forward-phase drift at camera loss (true vs estimate endpoint)
+            drifts.append(math.hypot(true_recon[-1][1] - est[-1][1],
+                                     true_recon[-1][2] - est[-1][2]))
+            # single-state (estimate == true) replay on the noisy trajectory
+            fwd_b.append(recovery_pe_closed_loop(est, b))
+            fwd_d.append(recovery_pe_closed_loop(est, d))
+            # two-state replay: forward drift retained
             r1 = random.Random(5000 + run)
-            both_b.append(recovery_pe_closed_loop_noisy(p, b, sigma_v, sigma_w, r1))
+            both_b.append(recovery_pe_closed_loop_noisy_2state(
+                true_recon, est, b, sigma_v, sigma_w, r1))
             r1 = random.Random(5000 + run)
-            both_d.append(recovery_pe_closed_loop_noisy(p, d, sigma_v, sigma_w, r1))
+            both_d.append(recovery_pe_closed_loop_noisy_2state(
+                true_recon, est, d, sigma_v, sigma_w, r1))
             r2_ns.append(len(d))
             db_ns.append(len(db))
         mb, cb = _mean_ci(both_b)
@@ -804,10 +898,13 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
         fd, _ = _mean_ci(fwd_d)
         mr2, cr2 = _mean_ci(r2_ns)
         mdb, cdb = _mean_ci(db_ns)
+        dm, dc = _mean_ci(drifts)
         print(f"[{name}] N_base={n_base}")
         print(f"  M1 PE (m): fwd-noise-only base={fb:.3f} dream={fd:.3f} | "
-              f"both-phase base={mb:.3f}+/-{cb:.3f} dream={md:.3f}+/-{cd:.3f} "
+              f"two-state base={mb:.3f}+/-{cb:.3f} dream={md:.3f}+/-{cd:.3f} "
               f"(max {max(both_b):.3f}/{max(both_d):.3f})")
+        print(f"    forward drift at camera loss: {dm:.3f}+/-{dc:.3f} m "
+              f"(min {min(drifts):.3f} / max {max(drifts):.3f})")
         print(f"  M2 N: R2_s channel {mr2:.1f}+/-{cr2:.1f} | "
               f"velocity-deadband {mdb:.1f}+/-{cdb:.1f}")
     return 0
