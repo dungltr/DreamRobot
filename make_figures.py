@@ -271,7 +271,7 @@ def fig_tradeoff():
 def fig_noise():
     import random
     sigma_levels = [0.0, 0.01, 0.02, 0.05]
-    runs = 20
+    runs = 50
     colors = {"A": "#1f77b4", "B": "#2ca02c", "C": "#d62728"}
     fig, ax = plt.subplots(figsize=(6.2, 2.4))
     for w in "ABC":
