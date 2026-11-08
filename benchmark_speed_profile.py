@@ -72,6 +72,9 @@ def speed_profile_recon():
 
 
 def s_error(recon, idx):
+    """Diagnostic arc-length decoder: max |reconstructed s - true s| by
+    interpolating the accumulated arc length s (recon[i][4]) between landmark
+    indices. Not the deployed chord payload (see rb.chord_payload_s_error)."""
     idx = sorted(set([0] + idx + [len(recon) - 1]))
     j = 0
     mx = 0.0
@@ -114,10 +117,10 @@ def run_speed_stress():
     on = rb.dream_sampler(recon, r2_threshold=0.98, regress_speed=True)
     off = rb.dream_sampler(recon, r2_threshold=0.98, regress_speed=False)
     print("Speed-channel stress test (synthetic, multiple speed changes):")
-    print(f"  path+speed: N={len(on):>2}  e_s={s_error(recon, on):.4f} m  "
+    print(f"  path+speed: N={len(on):>2}  e_s(chord)={rb.chord_payload_s_error(recon, on):.4f} m  "
           f"e_v={v_error(recon, on):.4f} m/s")
-    print(f"  path-only : N={len(off):>2}  e_s={s_error(recon, off):.4f} m  "
-          f"e_v={v_error(recon, off):.4f} m/s")
+    print(f"  path-only : N={len(off):>2}  e_s(chord)={rb.chord_payload_s_error(recon, off):.4f} m  "
+          f"(arc diagnostic {s_error(recon, off):.4f})  e_v={v_error(recon, off):.4f} m/s")
 
 
 # ---------------------------------------------------------------------------

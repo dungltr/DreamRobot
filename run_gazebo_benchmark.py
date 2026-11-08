@@ -268,6 +268,38 @@ def _norm_angle(a):
     return a
 
 
+def chord_payload_s_error(recon, idx):
+    """Distance--time reconstruction error from the *deployed* serialized
+    payload. The recorder stores the Euclidean chord between consecutive
+    landmarks, so the decoder reconstructs s_k = sum_{j<=k} d_j and
+    t_k = sum_{j<=k} T_j (the landmark timestamps) and linearly interpolates
+    s(t) in time; e_s = max_i |s_i - s_tilde(t_i)| against the true travelled
+    arc length s_i. This is the metric reported in Table~tab:speed of the
+    manuscript. On curved paths the accumulated chord underestimates the arc,
+    so e_s mixes three sources: when to store (sampling), the chord-vs-arc
+    representation of d, and the time-linear interpolation. The diagnostic
+    arc-length decoder (recon[i][4] interpolated between landmarks) isolates
+    the sampling component alone and is reported separately where needed."""
+    idx = sorted(set([0] + idx + [len(recon) - 1]))
+    lm = [(recon[i][0], recon[i][1], recon[i][2]) for i in idx]
+    s_k = [0.0]
+    for k in range(1, len(lm)):
+        d = math.hypot(lm[k][1] - lm[k - 1][1], lm[k][2] - lm[k - 1][2])
+        s_k.append(s_k[-1] + d)
+    j = 0
+    mx = 0.0
+    for i, (t, _x, _y, _psi, s, _v) in enumerate(recon):
+        while j + 1 < len(idx) and idx[j + 1] <= i:
+            j += 1
+        if j + 1 >= len(idx):
+            break
+        t0, t1 = lm[j][0], lm[j + 1][0]
+        frac = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+        sh = s_k[j] + frac * (s_k[j + 1] - s_k[j])
+        mx = max(mx, abs(sh - s))
+    return mx
+
+
 def baseline_sampler(recon, straight_period=2.0, curve_period=1.0):
     """Return landmark indices via the 0.5/1.0 Hz yaw-window heuristic."""
     from collections import deque

@@ -85,7 +85,10 @@ def fair_n_err(recon, idx):
 
 
 def s_recon_error(recon, idx):
-    """Max |reconstructed s - true s| over samples, interpolated by index."""
+    """Diagnostic arc-length decoder: max |reconstructed s - true s| over
+    samples, interpolating the accumulated arc length s (recon[i][4]) between
+    landmark indices. This isolates the *sampling* component of the error and
+    is NOT the deployed payload decoder (see rb.chord_payload_s_error)."""
     idx = sorted(set([0] + idx + [len(recon) - 1]))
     if len(idx) < 2:
         return float("inf")
@@ -131,7 +134,7 @@ def main():
             print(f"  hybrid a={ang} R2={th:<5}| {n:>5} | {e:>9.4f}")
 
     print("\n" + "=" * 78)
-    print("Speed-channel evaluation (s(t) reconstruction, independent of N>=2)")
+    print("Speed-channel evaluation (deployed chord-payload decoder; arc diagnostic in parens)")
     print("=" * 78)
     for name in "ABC":
         recon = load_recon(name)
@@ -141,10 +144,11 @@ def main():
         # sweep-angle + speed hybrid vs pure sweep-angle
         h = sweep_angle_speed(recon, angle=0.5, r2_th=0.98)
         s = bb.sweep_angle(recon, angle=0.5)
-        print(f"[{name}] s(t) max err: dream(on)={s_recon_error(recon, d_on):.4f} "
-              f"dream(off)={s_recon_error(recon, d_off):.4f} | "
-              f"sweep+speed={s_recon_error(recon, h):.4f} "
-              f"sweep={s_recon_error(recon, s):.4f}")
+        print(f"[{name}] chord e_s: dream(on)={rb.chord_payload_s_error(recon, d_on):.4f} "
+              f"dream(off)={rb.chord_payload_s_error(recon, d_off):.4f} | "
+              f"sweep+speed={rb.chord_payload_s_error(recon, h):.4f} "
+              f"sweep={rb.chord_payload_s_error(recon, s):.4f} "
+              f"(arc-diagnostic off={s_recon_error(recon, d_off):.4f})")
 
     print("\n" + "=" * 78)
     print("Clean straight-line unit test")
