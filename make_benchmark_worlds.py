@@ -47,13 +47,14 @@ def obstacle_block(name, x, y, r=0.2, h=0.6):
 
 
 def set_corridor_length(sdf, length):
-    """Rewrite the corridor length (walls + end wall + guide lines) to `length` m."""
+    """Rewrite the corridor length (walls + end wall + guide lines) to `length` m
+    and widen the side walls to y = +/-1.15 m (2.2 m corridor)."""
     half = length / 2.0
-    # Left and right walls (pose x = length/2, y = +/-0.9) and their length.
+    # Left and right walls (pose x = length/2, y = +/-1.15) and their length.
     sdf = sdf.replace("<pose>7.5 0.9 0.2 0 0 0</pose>",
-                       f"<pose>{half} 0.9 0.2 0 0 0</pose>")
+                       f"<pose>{half} 1.15 0.2 0 0 0</pose>")
     sdf = sdf.replace("<pose>7.5 -0.9 0.2 0 0 0</pose>",
-                       f"<pose>{half} -0.9 0.2 0 0 0</pose>")
+                       f"<pose>{half} -1.15 0.2 0 0 0</pose>")
     sdf = sdf.replace("<size>15 0.1 0.4</size>",
                        f"<size>{length} 0.1 0.4</size>")
     # End wall (pose x = length).
@@ -142,18 +143,12 @@ def main():
         base = fh.read()
 
     worlds = {
+        # No obstacles: the experiment is the blind return after camera loss,
+        # not obstacle avoidance. The corridor just has to be wide enough for
+        # the scripted (v, omega) weave to stay clear of the walls (2.2 m).
         "world_a_straight.sdf": (15.0, []),
-        "world_b_slalom.sdf": (15.0, [
-            ("obstacle_a", 1.5, 0.3),
-            ("obstacle_b", 3.0, -0.3),
-            ("obstacle_c", 4.5, 0.3),
-            ("obstacle_d", 6.0, -0.3),
-        ]),
-        "world_c_scurve.sdf": (20.0, [
-            ("obstacle_a", 1.5, 0.3),
-            ("obstacle_b", 3.0, -0.3),
-            ("obstacle_c", 6.0, 0.35),
-        ]),
+        "world_b_slalom.sdf": (15.0, []),
+        "world_c_scurve.sdf": (15.0, []),
     }
 
     for fname, (length, obstacles) in worlds.items():

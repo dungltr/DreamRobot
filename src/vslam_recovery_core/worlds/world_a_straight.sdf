@@ -7,11 +7,11 @@
   III/V/VI):
 
     * corridor width  = 2.2 m (walls at y = +/-1.10 m);
-    * corridor length = 15 m  (supports the 2.6 m .. 13.2 m tests of Table VI);
+    * corridor length = 15 m;
     * two parallel yellow guide lines for the robot to follow the centre axis;
-    * two staggered cylindrical obstacles (r = 0.2 m, h = 0.6 m):
-        obstacle 1 at x = 1.5 m, y =  0.3 m (left);
-        obstacle 2 at x = 3.0 m, y = -0.3 m (right) -> zig-zag S-curve;
+    * no obstacles: the experiment is the blind return after camera loss, so
+      the corridor only has to be wide enough for the scripted (v, omega)
+      weave to stay clear of the walls;
     * a differential-drive robot (Kobuki/TurtleBot class) with:
         - gz-sim diff-drive plugin  (input /cmd_vel, output /odom),
         - RGB camera  -> /camera (image stream),

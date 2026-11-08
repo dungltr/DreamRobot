@@ -66,9 +66,7 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import Bool, Int32, String
 
 import optimal_trajectory as ot
-from benchmark_profiles import (
-    PROFILES, profile_duration, benchmark_key_for_world,
-)
+from benchmark_profiles import PROFILES, benchmark_key_for_world
 
 # ---------------------------------------------------------------------------
 # Waypoints for the segmented turn-then-drive modes (Features 1 and 2).
@@ -200,7 +198,8 @@ class DashboardNode(Node):
         self.benchmark_timer = None
         self.benchmark_key = None
         self.benchmark_segments = []
-        self.benchmark_start = None
+        self.benchmark_cum_arc = []
+        self.benchmark_total_arc = 0.0
 
         self.get_logger().info(f"Dashboard node ready. yaml_file='{self.yaml_file}'")
 
@@ -459,7 +458,18 @@ class DashboardNode(Node):
         self.stop_auto_run()
         self.benchmark_key = key
         self.benchmark_segments = list(PROFILES[key])
-        self.benchmark_start = self.get_clock().now()
+        # Pre-compute the cumulative arc length at the end of each segment, so
+        # the open-loop drive is indexed by the *measured* travelled distance
+        # (odometry) instead of wall-clock time. This is robust to the Gazebo
+        # real-time factor: the camera now cuts at a percentage of the actual
+        # distance, not after a fixed number of wall-clock seconds.
+        cum = []
+        acc = 0.0
+        for v, w, dur in self.benchmark_segments:
+            acc += v * dur
+            cum.append(acc)
+        self.benchmark_cum_arc = cum
+        self.benchmark_total_arc = cum[-1] if cum else 0.0
         self.benchmark_active = True
         # Fresh run from the origin: reset travelled distance and re-arm the
         # automatic camera cutoff, mirroring start_auto_run().
@@ -474,34 +484,32 @@ class DashboardNode(Node):
                 1.0 / BENCHMARK_DRIVE_FREQ, self.benchmark_tick)
         self.get_logger().info(
             f'Benchmark run {key} started '
-            f'({len(self.benchmark_segments)} segments).')
+            f'({len(self.benchmark_segments)} segments, '
+            f'{self.benchmark_total_arc:.2f} m).')
 
     def benchmark_tick(self):
         if not self.benchmark_active:
             return
-        elapsed = (self.get_clock().now()
-                   - self.benchmark_start).nanoseconds * 1e-9
-        total = profile_duration(self.benchmark_key)
+        d = self.forward_dist
+        total = self.benchmark_total_arc
 
-        # Camera auto-cutoff at the selected fraction of the nominal profile.
-        if elapsed >= (self.failure_percent / 100.0) * total:
+        # Camera auto-cutoff at the selected fraction of the nominal path length.
+        if d >= (self.failure_percent / 100.0) * total:
             self.stop_benchmark()
             if not self.failure_fired and self.state == 'forward':
                 self.failure_fired = True
                 self.get_logger().info(
                     f'Benchmark camera cutoff at {self.failure_percent}% '
-                    f'(t={elapsed:.2f} s).')
+                    f'(d={d:.2f} m).')
                 self.trigger_failure()
             return
 
-        # Select the current (v, w) segment by cumulative duration.
-        acc = 0.0
+        # Select the current (v, w) segment by cumulative arc length.
         v = w = 0.0
-        for seg_v, seg_w, seg_dur in self.benchmark_segments:
-            if elapsed < acc + seg_dur:
-                v, w = seg_v, seg_w
+        for i, seg_end in enumerate(self.benchmark_cum_arc):
+            if d < seg_end:
+                v, w = self.benchmark_segments[i][0], self.benchmark_segments[i][1]
                 break
-            acc += seg_dur
 
         twist = Twist()
         twist.linear.x = v
