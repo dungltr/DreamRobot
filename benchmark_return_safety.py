@@ -35,10 +35,13 @@ sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import run_gazebo_benchmark as rb  # noqa: E402
 
 WALL_HALF = 1.10  # inner face of the corridor wall (box centre 1.15, half-thickness 0.05)
+# The benchmark worlds are obstacle-free (the task is the blind return, not
+# obstacle avoidance); the dict is kept so the wall-only metrics below work
+# unchanged.
 OBSTACLES = {
     "A": [],
-    "B": [(1.5, 0.3), (3.0, -0.3), (4.5, 0.3), (6.0, -0.3)],
-    "C": [(1.5, 0.3), (3.0, -0.3), (6.0, 0.35)],
+    "B": [],
+    "C": [],
 }
 OBST_R = 0.2
 
