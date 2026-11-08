@@ -211,7 +211,7 @@ def main():
             if args.mc:
                 ns, pms, prs = [], [], []
                 for run in range(args.runs):
-                    rng = random.Random(9000 + run)
+                    rng = random.Random(5000 + run)
                     recon = rb.reconstruct_noisy(raw, 0.01, args.noise, rng)
                     n, pm, _pmn, pr = evaluate(recon, fn)
                     ns.append(n)
