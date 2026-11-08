@@ -766,7 +766,32 @@ class DashboardApp:
         # press, so the robot moves on its own for unattended demos.
         if getattr(self.node, 'auto_run', False):
             self.root.after(2500, lambda: self.node.start_auto_run(4))
+
+        # Gazebo and RViz map their windows after the dashboard and can cover
+        # it (especially without a window manager). Re-raise the dashboard
+        # periodically during startup so it stays visible in the foreground.
+        self._raise_count = 0
+        self._raise_window_periodic()
         self._tick()
+
+    def _raise_window(self):
+        """Bring the dashboard window to the foreground once."""
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.attributes('-topmost', True)
+            self.root.update_idletasks()
+            self.root.attributes('-topmost', False)
+        except tk.TclError:
+            pass
+
+    def _raise_window_periodic(self):
+        """Re-raise every 2 s for the first ~60 s so late-mapping Gazebo/RViz
+        windows do not end up covering the dashboard."""
+        self._raise_window()
+        self._raise_count += 1
+        if self._raise_count < 30:
+            self.root.after(2000, self._raise_window_periodic)
 
     # ------------------------------------------------------------------ #
     # Scroll helpers
