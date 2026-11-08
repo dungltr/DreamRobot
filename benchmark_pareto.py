@@ -164,5 +164,57 @@ def main():
           else "FAIL")
 
 
+def make_pareto_figure():
+    """Plot the online threshold sweep (N vs max path error) with the Pareto
+    frontier, for the three online variants on the slalom (World B) and the
+    gentle S-curve (World C)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 3.2))
+    for ax, name in zip(axes, "BC"):
+        recon = load_recon(name)
+        # DREAM (path+speed) sweep
+        dx, dy = [], []
+        for th in (0.85, 0.90, 0.95, 0.96, 0.97, 0.98, 0.99, 1.00):
+            n, e = fair_n_err(recon, rb.dream_sampler(recon, r2_threshold=th))
+            dx.append(n); dy.append(e)
+        # sweep-angle sweep
+        sx, sy = [], []
+        for ang in (0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.8, 1.0, 1.2, 1.5):
+            n, e = fair_n_err(recon, bb.sweep_angle(recon, angle=ang))
+            sx.append(n); sy.append(e)
+        # hybrid sweep
+        hx, hy = [], []
+        for ang in (0.15, 0.2, 0.3, 0.35, 0.4, 0.5, 0.6, 0.8, 1.0):
+            n, e = fair_n_err(recon, sweep_angle_speed(recon, angle=ang, r2_th=0.98))
+            hx.append(n); hy.append(e)
+        # Pareto frontier over the union of all points
+        pts = list(zip(dx, dy)) + list(zip(sx, sy)) + list(zip(hx, hy))
+        nondom = []
+        for n, e in pts:
+            if all((e <= e2 or n <= n2) for n2, e2 in pts):
+                nondom.append((n, e))
+        nondom = sorted(set(nondom))
+
+        ax.plot(dx, dy, "o-", label="DREAM", lw=1.0, ms=4)
+        ax.plot(sx, sy, "s-", label="sweep-angle", lw=1.0, ms=4)
+        ax.plot(hx, hy, "^-", label="sweep-angle+speed", lw=1.0, ms=4)
+        if nondom:
+            nx, ny = zip(*nondom)
+            ax.plot(nx, ny, "k--", lw=0.8, alpha=0.6, label="Pareto")
+        ax.set_xlabel("landmarks $N$")
+        ax.set_ylabel("max path error (m)")
+        ax.set_title(f"World {name}", fontsize=9)
+        ax.grid(True, alpha=0.3)
+        if name == "C":
+            ax.legend(fontsize=7, loc="upper right")
+    fig.tight_layout()
+    out = os.path.join("publish", "fig10_pareto.pdf")
+    fig.savefig(out, bbox_inches="tight")
+    print(f"[OK] {out}")
+
+
 if __name__ == "__main__":
     main()
