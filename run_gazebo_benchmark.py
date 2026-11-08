@@ -4,9 +4,9 @@ run_gazebo_benchmark.py
 
 End-to-end DREAM benchmark on Gazebo Fortress for the three benchmark worlds:
 
-  * World A (world_a_straight.sdf) : 15 m straight hallway   (max compression)
-  * World B (world_b_slalom.sdf)   : 15 m, 4 obstacles slalom
-  * World C (world_c_scurve.sdf)   : 20 m long S-curve circuit
+  * World A (world_a_straight.sdf) : straight hallway   (max compression)
+  * World B (world_b_slalom.sdf)   : tight slalom (sharp symmetric S-turns)
+  * World C (world_c_scurve.sdf)   : gentle S-curve
 
 For each world the script:
   1. starts Gazebo (headless) + ros_gz_bridge;

@@ -5,12 +5,12 @@ make_benchmark_worlds.py
 Generate the three DREAM benchmark worlds from the
 base recovery_corridor.sdf template:
 
-  * world_a_straight.sdf : 15 m straight hallway, NO obstacles (pure linear
+  * world_a_straight.sdf : 15 m straight hallway, no obstacles (pure linear
                            motion -> maximum theoretical compression ratio);
-  * world_b_slalom.sdf   : 15 m hallway with 4 staggered obstacles forcing a
-                           multi-turn slalom;
-  * world_c_scurve.sdf   : 20 m long S-curve circuit with 3 obstacles
-                           (accumulated drift / long-range return fidelity).
+  * world_b_slalom.sdf   : 15 m hallway, no obstacles, driven in a tight
+                           symmetric slalom;
+  * world_c_scurve.sdf   : 15 m hallway, no obstacles, driven in a gentle
+                           symmetric S-curve.
 
 The robot model, plugins and bridge topics are unchanged, so the same
 bridge_config.yaml and recovery nodes work for all three worlds.

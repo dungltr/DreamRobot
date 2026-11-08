@@ -3,7 +3,7 @@
 benchmark_return_safety.py
 
 Independent safety/quality metrics for the closed-loop reverse return on the
-three benchmark worlds (A/B/C), mirroring the wall-margin / obstacle-clearance
+three obstacle-free benchmark worlds (A/B/C), mirroring the wall-margin metric
 reported for the corridor demonstration in the manuscript.
 
 For each world and each sampler (baseline Shannon-Nyquist and DREAM), this
@@ -11,16 +11,16 @@ script simulates the full closed-loop pure-pursuit return (the same controller
 as recovery_pe_closed_loop in run_gazebo_benchmark.py) and reports:
 
   * PE           : final distance to the origin (the stopping tolerance);
-  * min wall     : minimum clearance to the corridor walls (inner face y=+-0.85);
-  * min obstacle : minimum clearance to the obstacle cylinders (radius 0.2);
+  * min wall     : minimum clearance to the corridor walls (inner face y=+-1.10);
   * max lateral  : maximum cross-track deviation of the return path from the
                    recorded forward path (independent of the stopping rule).
 
-A negative clearance means a collision. Geometry is read from the world files:
+A negative wall clearance means a collision. The worlds are obstacle-free (the
+task is the blind return after camera loss, not obstacle avoidance):
 
-  A  straight hallway, walls y=+-0.9, no obstacles.
-  B  15 m hallway, 4 cylinder obstacles r=0.2 at (1.5,0.3),(3,-0.3),(4.5,0.3),(6,-0.3).
-  C  20 m hallway, 3 cylinder obstacles r=0.2 at (1.5,0.3),(3,-0.3),(6,0.35).
+  A  straight hallway, walls y=+-1.15, no obstacles.
+  B  15 m hallway, no obstacles, driven in a tight symmetric slalom.
+  C  15 m hallway, no obstacles, driven in a gentle symmetric S-curve.
 
 Usage:  python3 benchmark_return_safety.py
         python3 benchmark_return_safety.py --sweep-controller

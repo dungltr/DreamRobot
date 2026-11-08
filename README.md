@@ -189,12 +189,12 @@ python3 run_gazebo_benchmark.py --compare
 **Expected result** (note the last `PE_*_cl` column is always `0.030`):
 
 ```
-[A] ... N_baseline=18 N_dream=2  DR= 88.9%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
-[B] ... N_baseline=26 N_dream=7  DR= 73.1%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
-[C] ... N_baseline=32 N_dream=9  DR= 71.9%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
+[A] ... N_baseline=19 N_dream=2  DR= 89.5%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
+[B] ... N_baseline=26 N_dream=8  DR= 69.2%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
+[C] ... N_baseline=33 N_dream=3  DR= 90.9%  ... PE_base_cl=0.030 m  PE_dream_cl=0.030 m
 ```
 
-Meaning: DREAM reduces the number of landmarks by 88.9% / 73.1% / 71.9% while the
+Meaning: DREAM reduces the number of landmarks by 89.5% / 69.2% / 90.9% while the
 **recovery error stays at 0.030 m** (same as baseline). This is the “Landmark count,
 data reduction, and closed-loop recovery error” table in the paper.
 
@@ -338,7 +338,7 @@ then use a VNC client to connect to `machine_address:5900`.
 
 | Content in the paper | Check command | Number that must match |
 |---|---|---|
-| DR / recovery-error table (3 worlds) | `python3 run_gazebo_benchmark.py --compare` | DR `88.9/73.1/71.9%`, PE `0.030 m` |
+| DR / recovery-error table (3 worlds) | `python3 run_gazebo_benchmark.py --compare` | DR `89.5/69.2/90.9%`, PE `0.030 m` |
 | R²_th threshold sweep table | `python3 sweep_r2_threshold.py` | PE `0.030 m` (except `inf`) |
 | Theory table (c ≈ 0.0168) | `python3 dream_theory_check.py` | `c ~= 0.0168` |
 | Monte-Carlo table | `run_gazebo_benchmark.py --mc ...` | PE `0.030±0.000 m` |
