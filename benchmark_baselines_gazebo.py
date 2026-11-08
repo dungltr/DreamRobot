@@ -179,10 +179,10 @@ METHODS = {
 def evaluate(recon, fn):
     n_total = len(recon)
     idx = fn(recon)
-    # Every method must include the trajectory endpoint for a fair full-path
-    # reconstruction comparison.
-    if not idx or idx[-1] != n_total - 1:
-        idx = idx + [n_total - 1]
+    # Every method must include the trajectory start and endpoint for a fair
+    # full-path reconstruction comparison (otherwise a sampler whose first
+    # emission is delayed would be penalised for the uncovered head segment).
+    idx = sorted(set([0] + idx + [n_total - 1]))
     pmax, pmean = path_error(recon, idx)
     pr = heading_rmse(recon, idx)
     return len(idx), pmax, pmean, pr
