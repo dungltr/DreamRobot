@@ -1,0 +1,7 @@
+# DREAM two-state state trace: World A, run 0
+# forward noise seed=5000, return noise seed=9000
+# camera-loss positional drift = 0.0174 m
+# camera-loss heading drift = 0.0135 rad
+# stage, true_x, true_y, true_psi, est_x, est_y, est_psi
+start, 0.0001, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000
+camera_loss, 3.9871, -0.0000, -0.0000, 3.9940, -0.0160, -0.0135

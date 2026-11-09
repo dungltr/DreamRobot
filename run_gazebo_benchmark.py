@@ -883,11 +883,13 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
             # single-state (estimate == true) replay on the noisy trajectory
             fwd_b.append(recovery_pe_closed_loop(est, b))
             fwd_d.append(recovery_pe_closed_loop(est, d))
-            # two-state replay: forward drift retained
-            r1 = random.Random(5000 + run)
+            # two-state replay: forward drift retained; the return-phase noise
+            # uses a distinct seed base so forward and return streams are
+            # decorrelated (domain separation per phase).
+            r1 = random.Random(9000 + run)
             both_b.append(recovery_pe_closed_loop_noisy_2state(
                 true_recon, est, b, sigma_v, sigma_w, r1))
-            r1 = random.Random(5000 + run)
+            r1 = random.Random(9000 + run)
             both_d.append(recovery_pe_closed_loop_noisy_2state(
                 true_recon, est, d, sigma_v, sigma_w, r1))
             r2_ns.append(len(d))
