@@ -628,10 +628,10 @@ def recovery_pe_closed_loop_noisy_2state(true_recon, est_recon, landmarks_idx,
     follows the noise-integrated forward trajectory and starts the return at
     its drifted endpoint (the two are NOT collapsed at camera loss). Waypoints
     are the estimate positions at the landmark indices (odometry-only), and the
-    return path is built in the estimate frame. Returns the true final distance
-    to the origin."""
+    return path is built in the estimate frame. Returns a tuple
+    (pe_true, pe_odom, completed, timed_out)."""
     if len(landmarks_idx) < 2:
-        return float("inf")
+        return float("inf"), float("inf"), False, True
 
     forward = [(est_recon[i][1], est_recon[i][2]) for i in landmarks_idx]
 
@@ -701,7 +701,11 @@ def recovery_pe_closed_loop_noisy_2state(true_recon, est_recon, landmarks_idx,
         yaw_est = _norm_angle(yaw_est + wn * dt)
 
         t += dt
-    return math.hypot(x, y)
+    pe_true = math.hypot(x, y)
+    pe_odom = math.hypot(x_est, y_est)
+    completed = pe_odom < 0.03
+    timed_out = not completed
+    return pe_true, pe_odom, completed, timed_out
 
 
 # ---------------------------------------------------------------------------
@@ -869,6 +873,9 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
         n_base = len(baseline_sampler(true_recon))
         fwd_b, fwd_d, both_b, both_d = [], [], [], []
         drifts = []
+        odom_pe = []
+        n_completed = 0
+        n_timedout = 0
         r2_ns, db_ns = [], []
         for run in range(runs):
             rng = random.Random(5000 + run)
@@ -887,11 +894,16 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
             # uses a distinct seed base so forward and return streams are
             # decorrelated (domain separation per phase).
             r1 = random.Random(9000 + run)
-            both_b.append(recovery_pe_closed_loop_noisy_2state(
-                true_recon, est, b, sigma_v, sigma_w, r1))
+            pb = recovery_pe_closed_loop_noisy_2state(
+                true_recon, est, b, sigma_v, sigma_w, r1)
+            both_b.append(pb[0])
+            odom_pe.append(pb[1])
+            n_completed += 1 if pb[2] else 0
+            n_timedout += 1 if pb[3] else 0
             r1 = random.Random(9000 + run)
-            both_d.append(recovery_pe_closed_loop_noisy_2state(
-                true_recon, est, d, sigma_v, sigma_w, r1))
+            pd = recovery_pe_closed_loop_noisy_2state(
+                true_recon, est, d, sigma_v, sigma_w, r1)
+            both_d.append(pd[0])
             r2_ns.append(len(d))
             db_ns.append(len(db))
         mb, cb = _mean_ci(both_b)
@@ -902,6 +914,7 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
         mdb, cdb = _mean_ci(db_ns)
         dm, dc = _mean_ci(drifts)
         print(f"[{name}] N_base={n_base}")
+        print(f"  controller completion: {n_completed}/{runs} runs PE_odom<0.03 m, {n_timedout} timeouts")
         print(f"  M1 PE (m): fwd-noise-only base={fb:.3f} dream={fd:.3f} | "
               f"two-state base={mb:.3f}+/-{cb:.3f} dream={md:.3f}+/-{cd:.3f} "
               f"(max {max(both_b):.3f}/{max(both_d):.3f})")
