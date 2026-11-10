@@ -33,7 +33,7 @@ import run_gazebo_benchmark as rb          # noqa: E402
 import benchmark_baselines_gazebo as bb    # noqa: E402
 
 ROBOT_HW, ROBOT_HD = 0.15, 0.10
-INNER_CORNER = (2.15, 0.85)   # concave corner of the L
+CORRIDOR_HALF_WIDTHS = (0.85, 0.60)  # 1.7 m and 1.2 m corridors
 DT = 0.02
 
 
@@ -172,7 +172,6 @@ def corner_clearance(track):
 
 def main():
     recon = l_corner_recon()
-    n = len(recon)
     samplers = [
         ("DREAM 0.98", rb.dream_sampler(recon, r2_threshold=0.98)),
         ("DREAM 0.90", rb.dream_sampler(recon, r2_threshold=0.90)),
@@ -184,15 +183,19 @@ def main():
     print("=" * 84)
     print("L-corridor 90 deg corner: footprint clearance to the inner corner")
     print("=" * 84)
-    print(f"{'sampler':<22} {'N':>4} {'final(m)':>9} {'corner(m)':>10} {'contact'}")
-    for name, idx in samplers:
-        track, pe = simulate_return(recon, idx)
-        if track is None:
-            print(f"{name:<22} {len(idx):>4}  {'inf':>9}")
-            continue
-        clr = corner_clearance(track)
-        contact = "YES" if clr < ROBOT_HD else "no"
-        print(f"{name:<22} {len(idx):>4} {pe:>9.3f} {clr:>10.3f} {contact}")
+    for hw in CORRIDOR_HALF_WIDTHS:
+        global INNER_CORNER
+        INNER_CORNER = (3.0 - hw, hw)   # concave corner of the L
+        print(f"\n--- corridor half-width {hw} m ({2*hw:.1f} m wide) ---")
+        print(f"{'sampler':<22} {'N':>4} {'final(m)':>9} {'corner(m)':>10} {'contact'}")
+        for name, idx in samplers:
+            track, pe = simulate_return(recon, idx)
+            if track is None:
+                print(f"{name:<22} {len(idx):>4}  {'inf':>9}")
+                continue
+            clr = corner_clearance(track)
+            contact = "YES" if clr < ROBOT_HD else "no"
+            print(f"{name:<22} {len(idx):>4} {pe:>9.3f} {clr:>10.3f} {contact}")
     return 0
 
 
