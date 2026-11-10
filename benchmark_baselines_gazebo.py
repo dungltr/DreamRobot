@@ -104,6 +104,36 @@ def sweep_angle(recon, angle=0.5):
     return idx
 
 
+def segment_error(recon, eps=0.05):
+    """Online (causal) polyline-simplifier trigger: emit a landmark when the
+    maximum perpendicular distance of the buffered points since the last
+    landmark to the current anchor->point segment exceeds `eps` (metres). This
+    is the streaming analogue of the batch Douglas--Peucker criterion, so it
+    needs no future information."""
+    idx = [0]
+    ax, ay = recon[0][1], recon[0][2]
+    buf = [(ax, ay)]
+    for i in range(1, len(recon)):
+        x, y = recon[i][1], recon[i][2]
+        buf.append((x, y))
+        dx, dy = x - ax, y - ay
+        den = dx * dx + dy * dy
+        worst = 0.0
+        for (bx, by) in buf:
+            if den < 1e-12:
+                d = math.hypot(bx - ax, by - ay)
+            else:
+                u = ((bx - ax) * dx + (by - ay) * dy) / den
+                u = min(max(u, 0.0), 1.0)
+                d = math.hypot(bx - (ax + u * dx), by - (ay + u * dy))
+            worst = max(worst, d)
+        if worst > eps:
+            idx.append(i)
+            ax, ay = x, y
+            buf = [(x, y)]
+    return idx
+
+
 def heading_rmse(recon, idx):
     if len(idx) < 2:
         return float("inf")
@@ -171,6 +201,7 @@ METHODS = {
     "douglas-peucker (0.05 m)": douglas_peucker,
     "send-on-delta (0.05 m)": send_on_delta,
     "sweep-angle (0.5 rad)": sweep_angle,
+    "segment-error (0.05 m)": segment_error,
     "two-rate periodic (0.5/1.0 Hz)": rb.baseline_sampler,
     "dream (R2_th=0.98)": rb.dream_sampler,
 }

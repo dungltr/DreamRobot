@@ -105,7 +105,9 @@ def simulate_return(recon, idx, lookahead=0.45, speed=0.12):
     Returns (track, pe, t_return); track is None and pe is inf when the path
     is not reconstructable.
     """
-    if len(idx) < 2:
+    # A single landmark (the start) still yields a camera-loss-pose -> origin
+    # return polyline; only an empty landmark set is unevaluable.
+    if len(idx) < 1:
         return None, float("inf"), float("inf")
 
     forward = [(recon[i][1], recon[i][2]) for i in idx]

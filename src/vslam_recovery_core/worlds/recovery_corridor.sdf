@@ -31,6 +31,9 @@
     <plugin filename="ignition-gazebo-physics-system"
             name="gz::sim::systems::Physics">
     </plugin>
+    <plugin filename="ignition-gazebo-contact-system"
+            name="gz::sim::systems::Contact">
+    </plugin>
     <plugin filename="ignition-gazebo-sensors-system"
             name="gz::sim::systems::Sensors">
       <render_engine>ogre</render_engine>
@@ -234,6 +237,14 @@
           <update_rate>100</update_rate>
           <visualize>true</visualize>
           <topic>imu</topic>
+        </sensor>
+        <!-- Bumper: physics contact sensor on the chassis collision box. -->
+        <sensor name="bumper" type="contact">
+          <always_on>1</always_on>
+          <update_rate>50</update_rate>
+          <contact>
+            <collision>collision</collision>
+          </contact>
         </sensor>
       </link>
 

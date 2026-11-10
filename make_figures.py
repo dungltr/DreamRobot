@@ -28,6 +28,12 @@ import run_gazebo_benchmark as rb  # noqa: E402
 OUT = os.path.join(os.path.dirname(os.path.realpath(__file__)), "publish")
 plt.rcParams["font.family"] = "DejaVu Sans"
 plt.rcParams["axes.unicode_minus"] = False
+plt.rcParams["font.size"] = 10
+plt.rcParams["axes.labelsize"] = 10
+plt.rcParams["axes.titlesize"] = 10
+plt.rcParams["xtick.labelsize"] = 9
+plt.rcParams["ytick.labelsize"] = 9
+plt.rcParams["legend.fontsize"] = 9
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +179,7 @@ def fig_reconstruction():
         ax.axvline(t[i], color="red", lw=0.4, alpha=0.4)
     ax.set_xlabel("time [s]")
     ax.set_ylabel("$\\psi$ [rad]")
-    ax.legend(fontsize=7, loc="upper right")
+    ax.legend(fontsize=9, loc="upper right")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, "fig3_reconstruction.pdf"),
@@ -211,7 +217,7 @@ def fig_sweep():
     ax.set_xticklabels([f"{t:.2f}" for t in thresholds])
     ax.set_xlabel("$R^2_{\\mathrm{th}}$")
     ax.set_ylabel("Number of DREAM landmarks")
-    ax.legend(fontsize=7)
+    ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3, axis="y")
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, "fig4_sweep.pdf"), bbox_inches="tight")
@@ -233,9 +239,12 @@ def _load_recon(name):
 
 
 # ---------------------------------------------------------------------------
-# Fig. 5 — PE vs R^2_th (compression-fidelity trade-off) for the three worlds
+# Fig. 5 — lateral deviation vs R^2_th (the stopping-independent compression
+# cost) for the three worlds; the endpoint PE stays flat at the controller
+# tolerance, so it carries no trade-off information.
 # ---------------------------------------------------------------------------
 def fig_tradeoff():
+    import benchmark_return_safety as bs
     thresholds = [0.85, 0.90, 0.95, 0.98, 1.00]
     colors = {"A": "#1f77b4", "B": "#2ca02c", "C": "#d62728"}
     fig, ax = plt.subplots(figsize=(6.2, 2.4))
@@ -244,20 +253,15 @@ def fig_tradeoff():
         xs, ys = [], []
         for th in thresholds:
             d_idx = rb.dream_sampler(recon, r2_threshold=th)
-            pe = rb.recovery_pe_closed_loop(recon, d_idx)
-            if pe == float("inf"):
-                ax.plot(th, 2.0, "x", ms=7, color=colors[w], mew=1.5)
-            else:
-                xs.append(th)
-                ys.append(pe)
+            track, _pe, _t = bs.simulate_return(recon, d_idx)
+            if track is None:
+                continue
+            xs.append(th)
+            ys.append(bs.max_lateral(track, recon))
         ax.plot(xs, ys, "o-", ms=4, lw=1.0, color=colors[w], label=f"World {w}")
-    ax.axhline(0, color="k", lw=0.5)
-    ax.set_ylim(-0.05, 2.25)
     ax.set_xlabel("$R^2_{\\mathrm{th}}$")
-    ax.set_ylabel("PE (closed-loop) [m]")
-    ax.text(1.0, 2.08, "$\\times$ = 1 landmark (non-reconstructable)",
-            fontsize=6.5, ha="right", va="top")
-    ax.legend(fontsize=7, loc="upper left")
+    ax.set_ylabel("max lateral deviation [m]")
+    ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, "fig5_tradeoff.pdf"), bbox_inches="tight")
@@ -291,7 +295,7 @@ def fig_noise():
                     color=colors[w], capsize=3, label=f"World {w}")
     ax.set_xlabel("$\\sigma_{\\omega}$ [rad/s]")
     ax.set_ylabel("PE (closed-loop) [m]")
-    ax.legend(fontsize=7)
+    ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, "fig6_noise.pdf"), bbox_inches="tight")
@@ -317,7 +321,7 @@ def fig_landmarks():
             "rs", ms=6, label=f"DREAM ($N$={len(d_idx)})")
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
-    ax.legend(fontsize=7)
+    ax.legend(fontsize=9)
     ax.set_aspect("equal")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -401,7 +405,7 @@ def fig_return_path():
     ax.plot(ret_x[-1], ret_y[-1], "r*", ms=10, label="return end")
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
-    ax.legend(fontsize=7)
+    ax.legend(fontsize=9)
     ax.set_aspect("equal")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()

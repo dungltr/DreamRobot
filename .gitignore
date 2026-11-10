@@ -30,3 +30,6 @@ __pycache__/
 .idea/
 *.swp
 .DS_Store
+
+# Working screenshot backups (originals kept only for local reference)
+publish/Review/*_orig.png

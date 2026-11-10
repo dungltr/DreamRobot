@@ -21,6 +21,7 @@ Usage:
 """
 
 import argparse
+import csv
 import math
 import os
 import re
@@ -70,7 +71,10 @@ def make_headless_world(dst):
     src = open(WORLD_SRC).read()
     src = re.sub(r'\s*<plugin filename="ignition-gazebo-sensors-system".*?</plugin>\n',
                  '\n', src, flags=re.S)
-    src = re.sub(r'\s*<sensor[^>]*>.*?</sensor>\n', '\n', src, flags=re.S)
+    # Strip the camera / depth / IMU sensors only; keep the contact (bumper)
+    # sensor so the physics contact events are still published.
+    src = re.sub(r'\s*<sensor[^>]*type="(camera|depth_camera|imu)"[^>]*>.*?</sensor>\n',
+                 '\n', src, flags=re.S)
     src = re.sub(r'\s*<plugin filename="ignition-gazebo-imu-system".*?</plugin>\n',
                  '\n', src, flags=re.S)
     with open(dst, "w") as fh:
@@ -149,6 +153,9 @@ class AutoDriver(Node):
         self.forward_dist = 0.0
         self.last_pos = None
         self.triggered = False
+        self.trigger_t = None
+        self.completed_t = None
+        self.log = []  # (wall_t, x, y, yaw, v_cmd, w_cmd) at 20 Hz
 
         self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_cb, 10)
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel", 10)
@@ -212,6 +219,7 @@ class AutoDriver(Node):
         if self.triggered:
             return
         self.triggered = True
+        self.trigger_t = time.time()
         self.stop_auto_run()
         msg = Bool()
         msg.data = True
@@ -255,7 +263,7 @@ def dist_point_rect(px, py, cx, cy, yaw):
     return math.hypot(qx, qy)
 
 
-def run_mode(mode, timeout=600):
+def run_mode(mode, timeout=600, sigma_v=0.0, sigma_w=0.0, yaw_bias_rate=0.0):
     tmp = tempfile.mkdtemp(prefix="dream_auto_")
     world_hd = os.path.join(tmp, "world.sdf")
     bridge_cfg = os.path.join(tmp, "bridge.yaml")
@@ -265,10 +273,20 @@ def run_mode(mode, timeout=600):
 
     gz = start(["ign", "gazebo", "-s", "-r", world_hd])
     time.sleep(8.0)
+    # Stream the physics contact (bumper) topic to a log so any engine-level
+    # collision is recorded (not just the kinematic footprint check).
+    contact_topic = ("/world/recovery_corridor/model/recovery_robot/"
+                     "link/chassis/sensor/bumper/contact")
+    contact_log = os.path.join(tmp, "contact.log")
+    contact_proc = start(["sh", "-c",
+                          f"ign topic -e -t {contact_topic} > {contact_log} 2>&1"])
     bridge = start(["ros2", "run", "ros_gz_bridge", "parameter_bridge",
                     "--ros-args", "-p", f"config_file:={bridge_cfg}"])
     time.sleep(3.0)
-    sanitizer = start(["ros2", "run", "vslam_recovery_core", "odom_sanitizer.py"])
+    sanitizer = start(["ros2", "run", "vslam_recovery_core", "odom_sanitizer.py",
+                      "--ros-args", "-p", f"sigma_v:={sigma_v}",
+                      "-p", f"sigma_w:={sigma_w}",
+                      "-p", f"yaw_bias_rate:={yaw_bias_rate}"])
     recorder = start(["ros2", "run", "vslam_recovery_core", "recovery_recorder_server",
                       "--ros-args", "-p", f"yaml_file:={yaml_file}",
                       "-p", "odom_topic:=/odom"])
@@ -295,11 +313,14 @@ def run_mode(mode, timeout=600):
     coll = None
     start_t = time.time()
     t_trigger = None
+    pose_log = []  # (elapsed_s, x, y, yaw) at each spin iteration
+    completed = False
 
     try:
         while time.time() - start_t < timeout:
             rclpy.spin_once(driver, timeout_sec=0.01)
             x, y, yaw = driver.cur_x, driver.cur_y, driver.cur_yaw
+            pose_log.append((time.time() - start_t, x, y, yaw))
             for (cx, cy) in robot_corners(x, y, yaw):
                 min_wall = min(min_wall, WALL_Y - abs(cy))
             for (ox, oy) in OBSTACLES:
@@ -313,6 +334,7 @@ def run_mode(mode, timeout=600):
 
             if driver.triggered and t_trigger is not None:
                 if time.time() - t_trigger > 2.0 and math.hypot(x, y) < 0.06:
+                    completed = True
                     break
                 if time.time() - t_trigger > 120.0:
                     break
@@ -337,6 +359,7 @@ def run_mode(mode, timeout=600):
         kill(recorder)
         kill(sanitizer)
         kill(bridge)
+        kill(contact_proc)
         kill(gz)
 
     if min_wall < 0.0:
@@ -345,14 +368,48 @@ def run_mode(mode, timeout=600):
         coll = "obstacle"
     ok = (final_err < PASS_ERROR and coll is None
           and min_wall >= 0.0 and min_obst >= 0.0)
+
+    # Persist the ground-truth trajectory (odom_sanitizer noise is off in the
+    # demo, so /odom equals the Gazebo odometry = physics ground truth) and the
+    # event timestamps for reproducibility.
+    csv_path = os.path.join(WS, "bench_data", f"corridor_run_{mode}.csv")
+    with open(csv_path, "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["elapsed_s", "x", "y", "yaw"])
+        w.writerows(pose_log)
+
+    # Count physics contact events (engine-level collision blocks) recorded by
+    # the bumper contact sensor. The chassis always touches the ground plane,
+    # so only contacts whose counterpart is a wall or an obstacle count as a
+    # collision. The message is `contact { collision1 { name: ... } collision2
+    # { name: ... } ... }`.
+    n_contacts = -1
+    try:
+        with open(contact_log) as fh:
+            txt = fh.read()
+        blocks = txt.split("contact {")
+        n_contacts = sum(1 for b in blocks[1:]
+                         if "wall" in b or "obstacle" in b)
+    except Exception:
+        pass
     return dict(mode=mode, ok=ok, final_err=final_err, final_x=final_x,
                 final_y=final_y, min_wall=min_wall, min_obst=min_obst,
-                coll=coll)
+                coll=coll, completed=completed,
+                trigger_t=t_trigger - start_t if t_trigger else None,
+                csv=csv_path, n_contacts=n_contacts)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", type=int, default=0, help="1-4; 0 = all modes")
+    ap.add_argument("--sigma-v", type=float, default=0.0,
+                    help="odom_sanitizer linear-velocity noise std (m/s)")
+    ap.add_argument("--sigma-w", type=float, default=0.0,
+                    help="odom_sanitizer angular-velocity noise std (rad/s)")
+    ap.add_argument("--yaw-bias-rate", type=float, default=0.0,
+                    help="odom_sanitizer heading random-walk bias (rad/s/sqrt s)")
+    ap.add_argument("--runs", type=int, default=1,
+                    help="number of runs per mode for a distribution")
     args = ap.parse_args()
     modes = [args.mode] if args.mode else [1, 2, 3, 4]
 
@@ -360,18 +417,31 @@ def main():
     try:
         print("=" * 78)
         print("Headless Gazebo auto-mode recovery test "
-              "(camera failure at 100% of forward distance)")
+              f"(noise sigma_v={args.sigma_v}, sigma_w={args.sigma_w}, "
+              f"yaw_bias_rate={args.yaw_bias_rate}, runs={args.runs})")
         print("=" * 78)
         all_ok = True
         for m in modes:
-            print(f"--- Auto {m} ---", flush=True)
-            r = run_mode(m)
-            if not r["ok"]:
-                all_ok = False
-            status = "PASS" if r["ok"] else "FAIL"
-            print(f"Mode {m}: {status}  final_err={r['final_err']:.3f} m  "
-                  f"wall={r['min_wall']:.3f} m  obst={r['min_obst']:.3f} m  "
-                  f"coll={r['coll']}", flush=True)
+            ferrs = []
+            contacts = []
+            for r_i in range(args.runs):
+                r = run_mode(m, sigma_v=args.sigma_v, sigma_w=args.sigma_w,
+                             yaw_bias_rate=args.yaw_bias_rate)
+                if not r["ok"]:
+                    all_ok = False
+                ferrs.append(r["final_err"])
+                contacts.append(r["n_contacts"])
+                status = "PASS" if r["ok"] else "FAIL"
+                print(f"Mode {m} run {r_i}: {status}  "
+                      f"final_err={r['final_err']:.5f} m  "
+                      f"completed={r['completed']}  "
+                      f"wall={r['min_wall']:.3f} m  obst={r['min_obst']:.3f} m  "
+                      f"coll={r['coll']}  contacts={r['n_contacts']}",
+                      flush=True)
+            if args.runs > 1 and ferrs:
+                print(f"Mode {m}: final_err min/mean/max = "
+                      f"{min(ferrs):.5f} / {sum(ferrs)/len(ferrs):.5f} / "
+                      f"{max(ferrs):.5f} m, contacts={contacts}")
         print("-" * 78)
         print("RESULT:", "ALL PASS" if all_ok else "FAILURES PRESENT")
     finally:

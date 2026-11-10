@@ -194,8 +194,13 @@ def make_pareto_figure():
         for ang in (0.15, 0.2, 0.3, 0.35, 0.4, 0.5, 0.6, 0.8, 1.0):
             n, e = fair_n_err(recon, sweep_angle_speed(recon, angle=ang, r2_th=0.98))
             hx.append(n); hy.append(e)
+        # online segment-error (streaming polyline simplifier) sweep
+        ex, ey = [], []
+        for eps in (0.01, 0.02, 0.05, 0.10, 0.15, 0.20, 0.30):
+            n, e = fair_n_err(recon, bb.segment_error(recon, eps=eps))
+            ex.append(n); ey.append(e)
         # Pareto frontier over the union of all points
-        pts = list(zip(dx, dy)) + list(zip(sx, sy)) + list(zip(hx, hy))
+        pts = list(zip(dx, dy)) + list(zip(sx, sy)) + list(zip(hx, hy)) + list(zip(ex, ey))
         nondom = []
         for n, e in pts:
             if all((e <= e2 or n <= n2) for n2, e2 in pts):
@@ -205,6 +210,7 @@ def make_pareto_figure():
         ax.plot(dx, dy, "o-", label="DREAM", lw=1.0, ms=4)
         ax.plot(sx, sy, "s-", label="sweep-angle", lw=1.0, ms=4)
         ax.plot(hx, hy, "^-", label="sweep-angle+speed", lw=1.0, ms=4)
+        ax.plot(ex, ey, "v-", label="segment-error", lw=1.0, ms=4)
         if nondom:
             nx, ny = zip(*nondom)
             ax.plot(nx, ny, "k--", lw=0.8, alpha=0.6, label="Pareto")

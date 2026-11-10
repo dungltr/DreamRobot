@@ -172,7 +172,8 @@ class DreamSampler:
 
     def __init__(self, r2_threshold=0.98, min_window_size=5,
                  max_window_size=500, regress_speed=True,
-                 min_event_spacing=0.2, max_window_arc=None):
+                 min_event_spacing=0.2, max_window_arc=None,
+                 max_segment_length=None):
         self.r2_threshold = float(r2_threshold)
         self.min_window_size = int(min_window_size)
         self.max_window_size = int(max_window_size)
@@ -183,12 +184,21 @@ class DreamSampler:
         # than a fixed number of samples (which depends on the robot speed).
         self.max_window_arc = (float(max_window_arc)
                                if max_window_arc is not None else None)
+        # Optional segment-length guard: emit a safety landmark at least every
+        # `max_segment_length` metres of arc since the last landmark, even when
+        # the fit never degrades. This prevents a long, gently curved or
+        # straight segment -- whose accumulated curvature the capped fitting
+        # window can no longer see -- from never emitting a landmark. Distinct
+        # from the window caps, which truncate the fit without emitting.
+        self.max_segment_length = (float(max_segment_length)
+                                   if max_segment_length is not None else None)
 
         self._window = []                      # (t_local, x, y, s)
         self._path = PathLinearityAccumulator()
         self._speed = LinFitAccumulator()
         self._anchor = None        # absolute time of the current window origin
         self._last_event_t = None  # absolute time of the previous boundary landmark
+        self._segment_s0 = None    # cumulative s at the start of the current segment
         self.n_events = 0          # number of landmarks emitted
 
     # -- window helpers ---------------------------------------------------- #
@@ -210,16 +220,34 @@ class DreamSampler:
             return lin
         return min(lin, self._speed.r2())
 
+    def _flush(self, t, s):
+        """Emit a boundary landmark at the current window tail and restart the
+        window (used for both regression transitions and the segment-length
+        guard)."""
+        self._last_event_t = t
+        self.n_events += 1
+        tl, bx, by, bs = self._window[-1]
+        self._anchor += tl
+        self._window = [(0.0, bx, by, bs)]
+        self._path = PathLinearityAccumulator()
+        self._speed = LinFitAccumulator()
+        self._path.add(bx, by)
+        self._speed.add(0.0, bs)
+        self._segment_s0 = s
+        return True
+
     # -- public API -------------------------------------------------------- #
     def update(self, t, x, y, s):
         """Feed one sample at absolute time `t`.
 
         Returns True when the sample is a transition event and a landmark
-        should be recorded (this includes the very first start landmark).
+        should be recorded (this includes the very first start landmark and
+        the segment-length safety landmarks).
         """
         if self._anchor is None:
             self._anchor = t
             self._last_event_t = t
+            self._segment_s0 = s
             self._append(0.0, x, y, s)
             self.n_events += 1
             return True
@@ -235,21 +263,20 @@ class DreamSampler:
         if len(self._window) < self.min_window_size:
             return False
         if self._goodness() >= self.r2_threshold:
+            # Linear regime: no regression event, but a very long segment whose
+            # curvature the capped window can no longer see must still be closed
+            # off by the segment-length guard (a safety landmark every
+            # max_segment_length metres); otherwise a long, gently curved
+            # segment would never emit a landmark.
+            if (self.max_segment_length is not None
+                    and (s - self._segment_s0) >= self.max_segment_length):
+                return self._flush(t, s)
             return False
         if t - self._last_event_t < self.min_event_spacing:
             return False
 
         # Transition event: restart the window at the boundary point.
-        self._last_event_t = t
-        self.n_events += 1
-        tl, bx, by, bs = self._window[-1]
-        self._anchor += tl
-        self._window = [(0.0, bx, by, bs)]
-        self._path = PathLinearityAccumulator()
-        self._speed = LinFitAccumulator()
-        self._path.add(bx, by)
-        self._speed.add(0.0, bs)
-        return True
+        return self._flush(t, s)
 
     @property
     def last_event_t(self):

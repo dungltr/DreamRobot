@@ -331,13 +331,15 @@ def baseline_sampler(recon, straight_period=2.0, curve_period=1.0):
 
 
 def dream_sampler(recon, r2_threshold=0.98, regress_speed=True,
-                 max_window_size=500):
+                 max_window_size=500, max_window_arc=None,
+                 max_segment_length=None):
     """Return landmark indices via the DREAM R^2-triggered sampler."""
     sys.path.insert(0, os.path.join(_WS, "src", "vslam_recovery_core", "src"))
     import dream_core
     sampler = dream_core.DreamSampler(
         r2_threshold=r2_threshold, regress_speed=regress_speed,
-        max_window_size=max_window_size)
+        max_window_size=max_window_size, max_window_arc=max_window_arc,
+        max_segment_length=max_segment_length)
     idx = []
     for i, (t, x, y, psi, s, v) in enumerate(recon):
         if sampler.update(t, x, y, s):
@@ -397,6 +399,10 @@ def dream_sampler_deadband(recon, path_threshold=0.98, vel_threshold=0.30,
 
 def recovery_pe(recon, landmarks_idx):
     """Simulate the reverse replay and return the Euclidean return error (m)."""
+    # A single landmark (start only) carries no recorded velocity/heading to
+    # replay, so the open-loop error is undefined; it is therefore not
+    # evaluated here (the closed-loop replay of Algorithm 1 connects the
+    # camera-loss pose to the origin in that case).
     if len(landmarks_idx) < 2:
         return float("inf")
 
@@ -476,7 +482,10 @@ def recovery_pe_closed_loop(recon, landmarks_idx):
 
     Returns the Euclidean distance of the final pose to the origin.
     """
-    if len(landmarks_idx) < 2:
+    # A single landmark (the start) already defines a valid return polyline:
+    # camera-loss pose -> origin, which the pure-pursuit controller can follow
+    # back. Only an empty landmark set is unevaluable.
+    if len(landmarks_idx) < 1:
         return float("inf")
 
     # Forward path positions recorded at each landmark.
@@ -546,7 +555,9 @@ def recovery_pe_closed_loop_noisy(recon, landmarks_idx, sigma_v, sigma_w, rng):
     steers from a dead-reckoned odometry estimate that drifts from the true
     pose, while the true pose integrates the commanded velocities. Returns the
     true Euclidean distance of the final pose to the origin."""
-    if len(landmarks_idx) < 2:
+    # A single landmark (the start) still yields a camera-loss-pose -> origin
+    # return polyline; only an empty landmark set is unevaluable.
+    if len(landmarks_idx) < 1:
         return float("inf")
 
     forward = [(recon[i][1], recon[i][2]) for i in landmarks_idx]
@@ -630,7 +641,9 @@ def recovery_pe_closed_loop_noisy_2state(true_recon, est_recon, landmarks_idx,
     are the estimate positions at the landmark indices (odometry-only), and the
     return path is built in the estimate frame. Returns a tuple
     (pe_true, pe_odom, completed, timed_out)."""
-    if len(landmarks_idx) < 2:
+    # A single landmark (the start) still yields a camera-loss-pose -> origin
+    # return polyline in the estimate frame; only an empty set is unevaluable.
+    if len(landmarks_idx) < 1:
         return float("inf"), float("inf"), False, True
 
     forward = [(est_recon[i][1], est_recon[i][2]) for i in landmarks_idx]
