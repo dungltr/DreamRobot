@@ -85,10 +85,13 @@ def forward_estimate(raw, sigma_v, sigma_w, rng, gyro_bias=0.0,
                      wheel_scale=0.0, gyro_scale=0.0, arw=0.0,
                      bias_instability=0.0):
     """Dead-reckoned estimate integrating the measured velocity with wheel
-    radius scale, angular-rate scale, constant bias, white sensor noise, an
-    angular random walk (arw, rad/sqrt(s), applied as arw*sqrt(dt) per step)
-    and a slow bias instability (bias_instability, rad/s/sqrt(s), a random walk
-    on the bias itself). Returns the (t, x, y, psi, s, v) tuple list."""
+    radius scale, angular-rate scale, constant bias, white sensor noise, and
+    two independent rate random walks (`arw` and `bias_instability`, both
+    rad/s/sqrt(s), each accumulated as `state += coef*sqrt(dt)*gauss()` and
+    then added to the rate before integrating to heading). Note: these two
+    parameters are rate random walks on the angular rate, NOT angle random
+    walk; they are retained for completeness but are not part of the reported
+    sweep. Returns the (t, x, y, psi, s, v) tuple list."""
     out = []
     x = y = psi = s = 0.0
     rw = 0.0
@@ -322,22 +325,6 @@ def main():
         print(f"  {name}: mean PE={sum(pes)/len(pes):.3f} m  "
               f"min clearance={min(clear):.3f} m  "
               f"(all positive = no wall contact)")
-
-    print("\n(f) angular random walk (ARW, rad/sqrt(s), applied as arw*sqrt(dt) per step)")
-    for arw in (0.0, 0.005, 0.01, 0.02):
-        row = []
-        for name in "ABC":
-            pes, _c, _n = run(name, arw=arw)
-            row.append(f"{name}: {sum(pes)/len(pes):.3f} m / {succ(pes)*100:.0f}%")
-        print(f"  arw={arw:>5.3f}  " + "   ".join(row))
-
-    print("\n(g) gyro bias instability (rad/s/sqrt(s), a random walk on the bias)")
-    for bi in (0.0, 0.001, 0.002, 0.005):
-        row = []
-        for name in "ABC":
-            pes, _c, _n = run(name, bias_instability=bi)
-            row.append(f"{name}: {sum(pes)/len(pes):.3f} m / {succ(pes)*100:.0f}%")
-        print(f"  bias_inst={bi:>5.3f}  " + "   ".join(row))
 
     return 0
 
