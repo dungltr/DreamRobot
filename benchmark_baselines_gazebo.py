@@ -134,6 +134,42 @@ def segment_error(recon, eps=0.05):
     return idx
 
 
+def online_pla(recon, eps=0.05):
+    """Online piecewise-linear approximation (sliding window with a bounded
+    L-infinity error): when the buffered point of maximum perpendicular
+    deviation from the anchor->current segment exceeds `eps`, emit that point
+    (not the current sample) and restart there. This is the online analogue of
+    the batch Douglas--Peucker vertex choice, with the same bounded-error
+    guarantee and no future information."""
+    idx = [0]
+    anchor = 0
+    buf = [0]
+    for i in range(1, len(recon)):
+        buf.append(i)
+        ax, ay = recon[anchor][1], recon[anchor][2]
+        bx, by = recon[i][1], recon[i][2]
+        dx, dy = bx - ax, by - ay
+        den = dx * dx + dy * dy
+        worst = 0.0
+        worst_j = anchor
+        for j in buf:
+            px, py = recon[j][1], recon[j][2]
+            if den < 1e-12:
+                d = math.hypot(px - ax, py - ay)
+            else:
+                u = ((px - ax) * dx + (py - ay) * dy) / den
+                u = min(max(u, 0.0), 1.0)
+                d = math.hypot(px - (ax + u * dx), py - (ay + u * dy))
+            if d > worst:
+                worst = d
+                worst_j = j
+        if worst > eps:
+            idx.append(worst_j)
+            anchor = worst_j
+            buf = [worst_j]
+    return idx
+
+
 def heading_rmse(recon, idx):
     if len(idx) < 2:
         return float("inf")
@@ -202,6 +238,7 @@ METHODS = {
     "send-on-delta (0.05 m)": send_on_delta,
     "sweep-angle (0.5 rad)": sweep_angle,
     "segment-error (0.05 m)": segment_error,
+    "online-PLA (0.05 m)": online_pla,
     "two-rate periodic (0.5/1.0 Hz)": rb.baseline_sampler,
     "dream (R2_th=0.98)": rb.dream_sampler,
 }

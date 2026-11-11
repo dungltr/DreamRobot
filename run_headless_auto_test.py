@@ -280,6 +280,12 @@ def run_mode(mode, timeout=600, sigma_v=0.0, sigma_w=0.0, yaw_bias_rate=0.0):
     contact_log = os.path.join(tmp, "contact.log")
     contact_proc = start(["sh", "-c",
                           f"ign topic -e -t {contact_topic} > {contact_log} 2>&1"])
+    # Stream the world-frame dynamic pose so the true (physics) endpoint can be
+    # reported separately from the odometry-frame endpoint.
+    gt_topic = "/world/recovery_corridor/dynamic_pose/info"
+    gt_log = os.path.join(tmp, "gt.log")
+    gt_proc = start(["sh", "-c",
+                     f"ign topic -e -t {gt_topic} > {gt_log} 2>&1"])
     bridge = start(["ros2", "run", "ros_gz_bridge", "parameter_bridge",
                     "--ros-args", "-p", f"config_file:={bridge_cfg}"])
     time.sleep(3.0)
@@ -360,6 +366,7 @@ def run_mode(mode, timeout=600, sigma_v=0.0, sigma_w=0.0, yaw_bias_rate=0.0):
         kill(sanitizer)
         kill(bridge)
         kill(contact_proc)
+        kill(gt_proc)
         kill(gz)
 
     if min_wall < 0.0:
@@ -392,11 +399,26 @@ def run_mode(mode, timeout=600, sigma_v=0.0, sigma_w=0.0, yaw_bias_rate=0.0):
                          if "wall" in b or "obstacle" in b)
     except Exception:
         pass
+
+    # Parse the world-frame (physics) endpoint from the dynamic-pose log: the
+    # last `pose { name: "recovery_robot" ... position { x: ... y: ... } }`.
+    gt_x = gt_y = None
+    try:
+        import re
+        txt = open(gt_log).read()
+        m = re.findall(
+            r'pose \{[^}]*name: "recovery_robot"[^}]*position \{\s*x: ([^\s]+)\s+y: ([^\s]+)',
+            txt)
+        if m:
+            gt_x, gt_y = float(m[-1][0]), float(m[-1][1])
+    except Exception:
+        pass
+    gt_err = math.hypot(gt_x, gt_y) if gt_x is not None else float("nan")
     return dict(mode=mode, ok=ok, final_err=final_err, final_x=final_x,
                 final_y=final_y, min_wall=min_wall, min_obst=min_obst,
                 coll=coll, completed=completed,
                 trigger_t=t_trigger - start_t if t_trigger else None,
-                csv=csv_path, n_contacts=n_contacts)
+                csv=csv_path, n_contacts=n_contacts, gt_err=gt_err)
 
 
 def main():
@@ -433,7 +455,8 @@ def main():
                 contacts.append(r["n_contacts"])
                 status = "PASS" if r["ok"] else "FAIL"
                 print(f"Mode {m} run {r_i}: {status}  "
-                      f"final_err={r['final_err']:.5f} m  "
+                      f"final_err(odom)={r['final_err']:.5f} m  "
+                      f"gt_err(world)={r['gt_err']:.5f} m  "
                       f"completed={r['completed']}  "
                       f"wall={r['min_wall']:.3f} m  obst={r['min_obst']:.3f} m  "
                       f"coll={r['coll']}  contacts={r['n_contacts']}",
