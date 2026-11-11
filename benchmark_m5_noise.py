@@ -113,13 +113,18 @@ def forward_estimate(raw, sigma_v, sigma_w, rng, gyro_bias=0.0,
 
 def two_state_return(true_recon, est_recon, landmarks_idx, sigma_v, sigma_w,
                      rng, gyro_bias=0.0, wheel_scale=0.0, gyro_scale=0.0,
-                     process_v=0.0, process_w=0.0):
+                     process_v=0.0, process_w=0.0, timeout=180.0,
+                     turn_timeout=12.0):
     """Two-state progress-constrained pure-pursuit return.
 
     True pose: integrates the commanded velocity perturbed by PROCESS noise
     (actuation slip) -- (v_cmd + pv, w_cmd + pw).
     Estimate: integrates the *measured* velocity -- scale*(v_cmd) + sensor
     noise + bias + scale*(w_cmd), i.e. what the controller actually observes.
+
+    `timeout` is the return-phase time budget (s); `turn_timeout` is the
+    in-place pi-turn budget. Length-scaled callers pass a larger `timeout` for
+    longer paths so the fixed budget does not dominate.
 
     Returns (pe_true, pe_odom, clearance, completed, timed_out).
     """
@@ -141,7 +146,7 @@ def two_state_return(true_recon, est_recon, landmarks_idx, sigma_v, sigma_w,
 
     target = norm(yaw_est + math.pi)
     rt = 0.0
-    while rt < 12.0:
+    while rt < turn_timeout:
         err = norm(target - yaw_est)
         if abs(err) < 0.03:
             break
@@ -162,7 +167,7 @@ def two_state_return(true_recon, est_recon, landmarks_idx, sigma_v, sigma_w,
     # progress-constrained nearest-point index (monotonic, no cross-branch jump)
     best_idx = 0
     clearance = float("inf")
-    while t < 180.0:
+    while t < timeout:
         dstart_est = math.hypot(x_est, y_est)
         if dstart_est < kFinalTolerance:
             break

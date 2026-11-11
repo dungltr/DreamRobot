@@ -263,7 +263,8 @@ def dist_point_rect(px, py, cx, cy, yaw):
     return math.hypot(qx, qy)
 
 
-def run_mode(mode, timeout=600, sigma_v=0.0, sigma_w=0.0, yaw_bias_rate=0.0):
+def run_mode(mode, timeout=600, sigma_v=0.0, sigma_w=0.0, yaw_bias_rate=0.0,
+             wheel_scale=0.0, gyro_scale=0.0):
     tmp = tempfile.mkdtemp(prefix="dream_auto_")
     world_hd = os.path.join(tmp, "world.sdf")
     bridge_cfg = os.path.join(tmp, "bridge.yaml")
@@ -292,7 +293,9 @@ def run_mode(mode, timeout=600, sigma_v=0.0, sigma_w=0.0, yaw_bias_rate=0.0):
     sanitizer = start(["ros2", "run", "vslam_recovery_core", "odom_sanitizer.py",
                       "--ros-args", "-p", f"sigma_v:={sigma_v}",
                       "-p", f"sigma_w:={sigma_w}",
-                      "-p", f"yaw_bias_rate:={yaw_bias_rate}"])
+                      "-p", f"yaw_bias_rate:={yaw_bias_rate}",
+                      "-p", f"wheel_scale:={wheel_scale}",
+                      "-p", f"gyro_scale:={gyro_scale}"])
     recorder = start(["ros2", "run", "vslam_recovery_core", "recovery_recorder_server",
                       "--ros-args", "-p", f"yaml_file:={yaml_file}",
                       "-p", "odom_topic:=/odom"])
@@ -430,6 +433,10 @@ def main():
                     help="odom_sanitizer angular-velocity noise std (rad/s)")
     ap.add_argument("--yaw-bias-rate", type=float, default=0.0,
                     help="odom_sanitizer heading random-walk bias (rad/s/sqrt s)")
+    ap.add_argument("--wheel-scale", type=float, default=0.0,
+                    help="odom_sanitizer linear-velocity scale error (v_meas=(1+s)v)")
+    ap.add_argument("--gyro-scale", type=float, default=0.0,
+                    help="odom_sanitizer angular-velocity scale error (w_meas=(1+s)w)")
     ap.add_argument("--runs", type=int, default=1,
                     help="number of runs per mode for a distribution")
     args = ap.parse_args()
@@ -440,7 +447,8 @@ def main():
         print("=" * 78)
         print("Headless Gazebo auto-mode recovery test "
               f"(noise sigma_v={args.sigma_v}, sigma_w={args.sigma_w}, "
-              f"yaw_bias_rate={args.yaw_bias_rate}, runs={args.runs})")
+              f"yaw_bias_rate={args.yaw_bias_rate}, wheel_scale={args.wheel_scale}, "
+              f"gyro_scale={args.gyro_scale}, runs={args.runs})")
         print("=" * 78)
         all_ok = True
         for m in modes:
@@ -448,7 +456,9 @@ def main():
             contacts = []
             for r_i in range(args.runs):
                 r = run_mode(m, sigma_v=args.sigma_v, sigma_w=args.sigma_w,
-                             yaw_bias_rate=args.yaw_bias_rate)
+                             yaw_bias_rate=args.yaw_bias_rate,
+                             wheel_scale=args.wheel_scale,
+                             gyro_scale=args.gyro_scale)
                 if not r["ok"]:
                     all_ok = False
                 ferrs.append(r["final_err"])

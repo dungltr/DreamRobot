@@ -74,10 +74,15 @@ class OdomSanitizer(Node):
         # are 0.0 so the node stays transparent unless explicitly configured:
         #   sigma_v       : Gaussian std of the linear-velocity feedback (m/s);
         #   sigma_w       : Gaussian std of the angular-velocity feedback (rad/s);
-        #   yaw_bias_rate : random-walk bias drift on the heading (rad/s per sqrt s).
+        #   yaw_bias_rate : random-walk bias drift on the heading (rad/s per sqrt s);
+        #   wheel_scale   : linear-velocity scale error (v_meas=(1+s)v), a
+        #                   wheel-radius miscalibration;
+        #   gyro_scale    : angular-velocity scale error (w_meas=(1+s)w).
         self.sigma_v = self.declare_parameter('sigma_v', 0.0).value
         self.sigma_w = self.declare_parameter('sigma_w', 0.0).value
         self.yaw_bias_rate = self.declare_parameter('yaw_bias_rate', 0.0).value
+        self.wheel_scale = self.declare_parameter('wheel_scale', 0.0).value
+        self.gyro_scale = self.declare_parameter('gyro_scale', 0.0).value
         self._bias = 0.0
 
         self.sub = self.create_subscription(Odometry, self.raw_topic, self.callback, 10)
@@ -100,6 +105,10 @@ class OdomSanitizer(Node):
         # Inject sensor noise into the velocity feedback (if configured).
         v = msg.twist.twist.linear.x
         w = msg.twist.twist.angular.z
+        if self.wheel_scale != 0.0:
+            v = (1.0 + self.wheel_scale) * v
+        if self.gyro_scale != 0.0:
+            w = (1.0 + self.gyro_scale) * w
         if self.sigma_v > 0.0:
             v += self.sigma_v * random.gauss(0.0, 1.0)
         if self.sigma_w > 0.0:
