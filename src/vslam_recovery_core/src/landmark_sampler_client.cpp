@@ -61,6 +61,7 @@ public:
     const double curve_frequency = declare_parameter<double>("curve_frequency", 1.0);
     monitor_period_ = declare_parameter<double>("monitor_period", 0.1);
     window_size_ = declare_parameter<int>("window_size", 4);
+    yaw_deadband_ = declare_parameter<double>("yaw_deadband", 1e-9);
 
     straight_period_ = (straight_frequency > 1e-6) ? (1.0 / straight_frequency) : 2.0;
     curve_period_ = (curve_frequency > 1e-6) ? (1.0 / curve_frequency) : 1.0;
@@ -115,8 +116,14 @@ private:
     const double d1 = yaws[2] - yaws[1];
     const double d2 = yaws[3] - yaws[2];
 
-    const bool all_positive = (d0 > 0.0) && (d1 > 0.0) && (d2 > 0.0);
-    const bool all_negative = (d0 < 0.0) && (d1 < 0.0) && (d2 < 0.0);
+    // Mixed signs: still a turn when at least one difference magnitude falls
+    // in the wrap-around range [pi, 2*pi]. A small deadband on the sign test
+    // (yaw_deadband_) keeps floating-point yaw noise (~1e-19 rad) on a straight
+    // segment from spuriously classifying the segment as curved.
+    const bool all_positive =
+      (d0 > yaw_deadband_) && (d1 > yaw_deadband_) && (d2 > yaw_deadband_);
+    const bool all_negative =
+      (d0 < -yaw_deadband_) && (d1 < -yaw_deadband_) && (d2 < -yaw_deadband_);
     if (all_positive || all_negative) {
       return true;
     }
@@ -190,6 +197,7 @@ private:
   std::string service_name_;
   double monitor_period_;
   int window_size_;
+  double yaw_deadband_;
   double straight_period_;
   double curve_period_;
   double current_period_;

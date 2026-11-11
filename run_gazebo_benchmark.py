@@ -300,8 +300,18 @@ def chord_payload_s_error(recon, idx):
     return mx
 
 
-def baseline_sampler(recon, straight_period=2.0, curve_period=1.0):
-    """Return landmark indices via the 0.5/1.0 Hz yaw-window heuristic."""
+def baseline_sampler(recon, straight_period=2.0, curve_period=1.0,
+                    yaw_deadband=1e-9):
+    """Return landmark indices via the 0.5/1.0 Hz yaw-window heuristic.
+
+    `yaw_deadband` is a numerical-noise floor on the yaw differences: the
+    sign-based straight/curved test of the reference heuristic treats three
+    consecutive same-sign yaw differences as curvature, which on a straight
+    segment with floating-point yaw noise (~1e-19 rad per step) spuriously
+    classifies ~40% of windows as curved and switches the sampler to 1 Hz
+    (19 landmarks on World A instead of 9). A tiny deadband (1e-9 rad,
+    ~10 orders below any real turn and far above the noise floor) restores
+    the intended 0.5 Hz behaviour on straight segments."""
     from collections import deque
     yaw_window = deque(maxlen=4)
     period = straight_period
@@ -314,7 +324,8 @@ def baseline_sampler(recon, straight_period=2.0, curve_period=1.0):
             return False
         y = list(yaw_window)
         d0, d1, d2 = y[1] - y[0], y[2] - y[1], y[3] - y[2]
-        if (d0 > 0 and d1 > 0 and d2 > 0) or (d0 < 0 and d1 < 0 and d2 < 0):
+        if (d0 > yaw_deadband and d1 > yaw_deadband and d2 > yaw_deadband) or \
+           (d0 < -yaw_deadband and d1 < -yaw_deadband and d2 < -yaw_deadband):
             return True
         return any(math.pi <= abs(d) <= 2 * math.pi for d in (d0, d1, d2))
 

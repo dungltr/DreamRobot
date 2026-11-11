@@ -113,8 +113,11 @@ def _uniform():
 # Baseline Shannon-Nyquist heuristic sampler (landmark_sampler_client logic)
 # ---------------------------------------------------------------------------
 def baseline_sample(samples, straight_period=2.0, curve_period=1.0,
-                    window_size=4):
-    """Replicate the baseline adaptive sampler; return [(t, psi, s), ...]."""
+                    window_size=4, yaw_deadband=1e-9):
+    """Replicate the baseline adaptive sampler; return [(t, psi, s), ...].
+
+    `yaw_deadband` is a numerical-noise floor on the yaw differences (see
+    run_gazebo_benchmark.baseline_sampler)."""
     landmarks = []
     yaw_window = deque(maxlen=window_size)
     period = straight_period
@@ -127,7 +130,7 @@ def baseline_sample(samples, straight_period=2.0, curve_period=1.0,
             elapsed += t - last_t
         last_t = t
 
-        curved = _is_curved(yaw_window, window_size)
+        curved = _is_curved(yaw_window, window_size, yaw_deadband)
         period = curve_period if curved else straight_period
 
         if elapsed >= period:
@@ -136,14 +139,15 @@ def baseline_sample(samples, straight_period=2.0, curve_period=1.0,
     return landmarks
 
 
-def _is_curved(yaw_window, window_size):
+def _is_curved(yaw_window, window_size, yaw_deadband=1e-9):
     if len(yaw_window) < window_size:
         return False
     yaws = list(yaw_window)
     d0 = yaws[1] - yaws[0]
     d1 = yaws[2] - yaws[1]
     d2 = yaws[3] - yaws[2]
-    if (d0 > 0 and d1 > 0 and d2 > 0) or (d0 < 0 and d1 < 0 and d2 < 0):
+    if (d0 > yaw_deadband and d1 > yaw_deadband and d2 > yaw_deadband) or \
+       (d0 < -yaw_deadband and d1 < -yaw_deadband and d2 < -yaw_deadband):
         return True
     for d in (d0, d1, d2):
         if math.pi <= abs(d) <= 2.0 * math.pi:

@@ -104,6 +104,30 @@ def sweep_angle(recon, angle=0.5):
     return idx
 
 
+def sweep_abs_angle(recon, angle=0.5):
+    """Online geometric baseline: record a landmark whenever the cumulative
+    *absolute* heading change (total turning) since the last landmark exceeds
+    `angle` (rad). Unlike the net sweep-angle trigger, |dpsi| never cancels on
+    alternating-curvature paths."""
+    idx = [0]
+    cum = 0.0
+    last_psi = recon[0][3]
+    for i, (_t, _x, _y, psi, _s, _v) in enumerate(recon):
+        if i == 0:
+            continue
+        d = psi - last_psi
+        while d > math.pi:
+            d -= 2.0 * math.pi
+        while d < -math.pi:
+            d += 2.0 * math.pi
+        cum += abs(d)
+        last_psi = psi
+        if cum >= angle:
+            idx.append(i)
+            cum = 0.0
+    return idx
+
+
 def segment_error(recon, eps=0.05):
     """Online (causal) polyline-simplifier trigger: emit a landmark when the
     maximum perpendicular distance of the buffered points since the last
@@ -273,6 +297,44 @@ def _seg_sed(recon, a, b):
     return worst
 
 
+def swing_slide(recon, eps=0.05):
+    """Swing filter (Elmeleegy et al. 2009): online d-dimensional piecewise-
+    linear approximation with per-dimension precision guarantees. For each
+    dimension (here x(t) and y(t) as functions of time) the filter maintains
+    the feasible slope interval of a line anchored at the last landmark that
+    stays within +/- `eps` of every buffered sample; when the interval of any
+    dimension becomes empty, the previous sample is emitted as a landmark and
+    a new segment starts there. This is a *time-synchronized per-axis L-inf*
+    bound, distinct from the perpendicular distance of the segment-error
+    trigger and from the synchronized Euclidean distance (SED) of OPW-TR."""
+    idx = [0]
+    anchor = 0
+    for e in range(1, len(recon)):
+        t0 = recon[anchor][0]
+        feasible = True
+        for dim in (1, 2):  # x(t) and y(t)
+            v0 = recon[anchor][dim]
+            m_lo, m_hi = -math.inf, math.inf
+            for i in range(anchor + 1, e + 1):
+                dt = recon[i][0] - t0
+                if dt <= 1e-12:
+                    if abs(recon[i][dim] - v0) > eps:
+                        m_lo, m_hi = math.inf, -math.inf
+                        break
+                    continue
+                m_lo = max(m_lo, (recon[i][dim] - v0 - eps) / dt)
+                m_hi = min(m_hi, (recon[i][dim] - v0 + eps) / dt)
+                if m_lo > m_hi:
+                    break
+            if m_lo > m_hi:
+                feasible = False
+                break
+        if not feasible:
+            idx.append(e - 1)
+            anchor = e - 1
+    return idx
+
+
 def squish(recon, n_keep):
     """SQUISH (budget-based spatiotemporal simplification, Muckell 2013): keep
     exactly `n_keep` points (the two endpoints are always kept) by iteratively
@@ -313,36 +375,6 @@ def squish(recon, n_keep):
             if 0 < j < n - 1 and not removed[j]:
                 heapq.heappush(heap, (err_of(j), j))
     return [i for i in range(n) if not removed[i]]
-
-
-def swing_slide(recon, eps=0.05):
-    """Deadband linear filter (the essence of the swing/slide filter of
-    Elmeleegy 2009, adapted to 2D): keep the current segment anchor->current;
-    points whose perpendicular distance to the segment stays within `eps` are
-    absorbed (the deadband), and a landmark is emitted only when a point
-    exceeds `eps`, at which point the segment restarts. Bounded L-infinity
-    error, causal."""
-    idx = [0]
-    anchor = 0
-    for i in range(1, len(recon)):
-        ax, ay = recon[anchor][1], recon[anchor][2]
-        bx, by = recon[i][1], recon[i][2]
-        dx, dy = bx - ax, by - ay
-        den = dx * dx + dy * dy
-        worst = 0.0
-        for j in range(anchor + 1, i):
-            px, py = recon[j][1], recon[j][2]
-            if den < 1e-12:
-                d = math.hypot(px - ax, py - ay)
-            else:
-                u = ((px - ax) * dx + (py - ay) * dy) / den
-                u = min(max(u, 0.0), 1.0)
-                d = math.hypot(px - (ax + u * dx), py - (ay + u * dy))
-            worst = max(worst, d)
-        if worst > eps:
-            idx.append(i)
-            anchor = i
-    return idx
 
 
 def heading_rmse(recon, idx):
@@ -411,7 +443,9 @@ METHODS = {
     "uniform (1 Hz)": uniform,
     "douglas-peucker (0.05 m)": douglas_peucker,
     "send-on-delta (0.05 m)": send_on_delta,
+    "swing/slide (0.05 m)": swing_slide,
     "sweep-angle (0.5 rad)": sweep_angle,
+    "sweep-abs-angle (0.5 rad)": sweep_abs_angle,
     "segment-error (0.05 m)": segment_error,
     "online-PLA (0.05 m)": online_pla,
     "SWAB (0.05 m)": swab,
