@@ -226,6 +226,37 @@ def swab(recon, eps=0.05, window=200):
     return idx
 
 
+def opw_tr(recon, eps=0.05):
+    """OPW-TR (opening window + time-ratio distance, Meratnia & de By 2004):
+    online spatiotemporal compression. Keep growing the segment from the anchor
+    while the maximum synchronized (time-ratio) distance of intermediate points
+    to the anchor->end segment is <= `eps`; when it exceeds `eps`, emit the
+    previous point and restart there. The time-ratio distance is the spatial
+    distance at the temporally-synchronized point (the time-linear interpolation
+    of the segment), so it is the time-aware analogue of the perpendicular
+    distance used by the segment-error trigger."""
+    idx = [0]
+    anchor = 0
+    for e in range(1, len(recon)):
+        ts = recon[anchor][0]
+        te = recon[e][0]
+        xs, ys = recon[anchor][1], recon[anchor][2]
+        xe, ye = recon[e][1], recon[e][2]
+        dte = te - ts
+        worst = 0.0
+        for i in range(anchor + 1, e):
+            ti = recon[i][0]
+            f = (ti - ts) / dte if dte > 1e-12 else 0.0
+            xp = xs + f * (xe - xs)
+            yp = ys + f * (ye - ys)
+            d = math.hypot(recon[i][1] - xp, recon[i][2] - yp)
+            worst = max(worst, d)
+        if worst > eps:
+            idx.append(e - 1)
+            anchor = e - 1
+    return idx
+
+
 def heading_rmse(recon, idx):
     if len(idx) < 2:
         return float("inf")
@@ -296,6 +327,7 @@ METHODS = {
     "segment-error (0.05 m)": segment_error,
     "online-PLA (0.05 m)": online_pla,
     "SWAB (0.05 m)": swab,
+    "OPW-TR (0.05 m)": opw_tr,
     "two-rate periodic (0.5/1.0 Hz)": rb.baseline_sampler,
     "dream (R2_th=0.98)": rb.dream_sampler,
 }
