@@ -25,6 +25,7 @@ Usage:  python3 benchmark_m6_traces.py
 """
 
 import csv
+import argparse
 import math
 import os
 import random
@@ -56,6 +57,11 @@ PROFILES = {
     # figure-eight: one CCW then one CW full circle sharing the start point
     "self_crossing":       [(0.20, 0.60, 10.5), (0.20, -0.60, 10.5),
                             (0.20, 0.00, 0.5)],
+    # long traces (~40 m) to check drift/compression scaling
+    "long_straight_40m":   [(0.20, 0.00, 195.0), (0.20, 0.60, 2.6),
+                            (0.20, 0.00, 100.0)],
+    "long_curved_40m":     [(0.20, 0.30, 12.0), (0.20, -0.30, 12.0)] * 5
+                            + [(0.20, 0.00, 10.0)],
 }
 
 MAX_LIN_ACCEL = 0.20
@@ -106,12 +112,12 @@ def pct(values, q):
     return s[lo] + (s[hi] - s[lo]) * (k - lo)
 
 
-def run_trace(name):
+def run_trace(name, runs=RUNS):
     raw = synthesize_raw(PROFILES[name])
     true_full = rb.reconstruct(raw)
     n = len(true_full)
     base_pe, dream_pe, diffs = [], [], []
-    for run_i in range(RUNS):
+    for run_i in range(runs):
         rng = random.Random(5000 + run_i)
         est_full = m5.forward_estimate(raw, SIGMA_V, SIGMA_W, rng)
         b = rb.baseline_sampler(est_full)
@@ -143,15 +149,23 @@ def run_trace(name):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--runs", type=int, default=RUNS,
+                    help="Monte-Carlo runs per trace")
+    ap.add_argument("--only-long", action="store_true",
+                    help="run only the long 40 m traces")
+    args = ap.parse_args()
+    names = ["long_straight_40m", "long_curved_40m"] if args.only_long \
+        else list(PROFILES.keys())
     print("=" * 90)
-    print(f"M6 independent-trace generalization (paired seeds, {RUNS} runs, "
+    print(f"M6 independent-trace generalization (paired seeds, {args.runs} runs, "
           f"sigma_v={SIGMA_V}, sigma_w={SIGMA_W})")
     print("=" * 90)
     print(f"{'trace':<20} {'N':>4} {'N_b':>4} {'N_d':>4} "
           f"{'PE_base':>12} {'PE_dream':>12} {'diff (d-b)':>14} "
           f"{'p90':>6} {'p95':>6} {'max':>6} {'succ':>5}")
-    for name in PROFILES:
-        r = run_trace(name)
+    for name in names:
+        r = run_trace(name, runs=args.runs)
         print(f"{r['name']:<20} {r['N_total']:>4} {r['N_base']:>4} "
               f"{r['N_dream']:>4} "
               f"{r['base_mean']:>6.3f}\u00b1{r['base_ci']:.3f} "

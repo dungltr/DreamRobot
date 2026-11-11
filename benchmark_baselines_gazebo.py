@@ -170,6 +170,62 @@ def online_pla(recon, eps=0.05):
     return idx
 
 
+def _seg_error(recon, a, b):
+    """Maximum perpendicular distance of points [a..b] to the segment a->b."""
+    ax, ay = recon[a][1], recon[a][2]
+    bx, by = recon[b][1], recon[b][2]
+    dx, dy = bx - ax, by - ay
+    den = dx * dx + dy * dy
+    worst = 0.0
+    for j in range(a, b + 1):
+        px, py = recon[j][1], recon[j][2]
+        if den < 1e-12:
+            d = math.hypot(px - ax, py - ay)
+        else:
+            u = ((px - ax) * dx + (py - ay) * dy) / den
+            u = min(max(u, 0.0), 1.0)
+            d = math.hypot(px - (ax + u * dx), py - (ay + u * dy))
+        worst = max(worst, d)
+    return worst
+
+
+def swab(recon, eps=0.05, window=200):
+    """SWAB (sliding window and bottom-up) online piecewise-linear
+    approximation: keep a bounded window of samples; when the window's fit
+    error exceeds `eps`, run bottom-up segmentation on the window (repeatedly
+    merge the adjacent pair with the smallest resulting error until every
+    remaining segment has error <= eps) and emit the first resulting segment.
+    Bounded L-infinity error, causal (no future samples)."""
+    idx = [0]
+    pos = 0
+    n = len(recon)
+    while pos < n - 1:
+        end = min(pos + window, n)
+        # bottom-up: start with per-sample segments, then greedily merge
+        segs = [[i] for i in range(pos, end)]
+        while len(segs) > 1:
+            best_cost = float("inf")
+            best_k = -1
+            for k in range(len(segs) - 1):
+                a = segs[k][0]
+                b = segs[k + 1][-1]
+                e = _seg_error(recon, a, b)
+                if e < best_cost:
+                    best_cost = e
+                    best_k = k
+            if best_cost > eps:
+                break
+            segs[best_k] = segs[best_k] + segs[best_k + 1]
+            segs.pop(best_k + 1)
+        # emit the endpoint of the first segment and advance
+        first_end = segs[0][-1]
+        if first_end <= pos:
+            first_end = min(pos + 1, n - 1)
+        idx.append(first_end)
+        pos = first_end
+    return idx
+
+
 def heading_rmse(recon, idx):
     if len(idx) < 2:
         return float("inf")
@@ -239,6 +295,7 @@ METHODS = {
     "sweep-angle (0.5 rad)": sweep_angle,
     "segment-error (0.05 m)": segment_error,
     "online-PLA (0.05 m)": online_pla,
+    "SWAB (0.05 m)": swab,
     "two-rate periodic (0.5/1.0 Hz)": rb.baseline_sampler,
     "dream (R2_th=0.98)": rb.dream_sampler,
 }
