@@ -75,7 +75,7 @@ def simulate_return(recon, idx, corner):
     returns the final error and the minimum footprint clearance to the inner
     corner."""
     if len(idx) < 1:
-        return float("inf"), float("inf")
+        return float("inf"), (float("inf"), False)
     forward = [(recon[i][1], recon[i][2]) for i in idx]
     x = recon[-1][1]
     y = recon[-1][2]
@@ -162,17 +162,36 @@ def simulate_return(recon, idx, corner):
 
 
 def corner_clearance(track, corner):
-    """Minimum distance from the robot footprint to the inner corner."""
-    best = float("inf")
+    """Minimum distance from the inner corner *point* to the robot footprint
+    rectangle (0.30 x 0.20 m, rotated by the robot heading) over the whole
+    return track. This is a true body-to-obstacle clearance: 0 means the corner
+    point lies on the rectangle boundary, and a negative signed value means it
+    lies inside the rectangle. Returns (min_separation, contact) where
+    `contact` is True iff the point entered the rectangle at any pose.
+
+    The point-to-rectangle separation is computed by transforming the corner
+    point into the robot body frame (translate by -pose, rotate by -yaw) and
+    measuring the distance to the [-HW,HW] x [-HD,HD] rectangle."""
+    min_sep = float("inf")
+    contact = False
     for (x, y, yaw) in track:
         c = math.cos(yaw)
         s = math.sin(yaw)
-        for sx in (-ROBOT_HW, ROBOT_HW):
-            for sy in (-ROBOT_HD, ROBOT_HD):
-                cx = x + sx * c - sy * s
-                cy = y + sx * s + sy * c
-                best = min(best, math.hypot(cx - corner[0], cy - corner[1]))
-    return best
+        dx = corner[0] - x
+        dy = corner[1] - y
+        lx = dx * c + dy * s
+        ly = -dx * s + dy * c
+        qx = abs(lx) - ROBOT_HW
+        qy = abs(ly) - ROBOT_HD
+        if qx <= 0.0 and qy <= 0.0:
+            # corner point inside the footprint -> penetration
+            pen = -min(abs(qx), abs(qy))
+            min_sep = min(min_sep, 0.0)
+            contact = True
+        else:
+            sep = math.hypot(max(qx, 0.0), max(qy, 0.0))
+            min_sep = min(min_sep, sep)
+    return min_sep, contact
 
 
 def sagitta_cap(recon, base_idx, cap):
@@ -219,12 +238,12 @@ def main():
                  sagitta_cap(recon, rb.dream_sampler(recon, r2_threshold=0.90), 0.10)),
                 ("sweep-angle 0.5", bb.sweep_angle(recon, angle=0.5)),
                 ("segment-error 0.05", bb.segment_error(recon, eps=0.05)),
+                ("segment-error 0.10", bb.segment_error(recon, eps=0.10)),
                 ("Douglas-Peucker 0.05", bb.douglas_peucker(recon, eps=0.05)),
             ]:
-                fe, clr = simulate_return(recon, idx, corner)
-                contact = "YES" if clr < ROBOT_HD else "no"
-                print(f"{theta_deg:>5} {hw:>5.2f} {name:<22} {len(idx):>4} "
-                      f"{fe:>8.3f} {clr:>9.3f} {contact}")
+                fe, (clr, contact) = simulate_return(recon, idx, corner)
+                print(f"{theta_deg:>5} {hw:>5.2f} {name:<24} {len(idx):>4} "
+                      f"{fe:>8.3f} {clr:>9.3f} {'YES' if contact else 'no'}")
     return 0
 
 

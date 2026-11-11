@@ -190,6 +190,7 @@ def main():
         sws = summ("sweep+speed")
         mb = summ("mb-path-only")
         dN = (ps[0] - po[0]) if po and ps else float("nan")
+        es_ratio = po[1] / ps[1] if po and ps else float("nan")
         print(f"{pname:<18} {'path-only':<22} {po[0]:>4.1f} {po[1]:>9.4f} "
               f"{po[2]:>8.4f} {0:>10.1f}")
         print(f"{pname:<18} {'path+speed':<22} {ps[0]:>4.1f} {ps[1]:>9.4f} "
@@ -201,6 +202,7 @@ def main():
         if mb:
             print(f"{pname:<18} {'path-only@mbudget':<22} {mb[0]:>4.1f} "
                   f"{mb[1]:>9.4f} {'-':>8} {'(>=N_ps)':>10}")
+        print(f"  -> e_s ratio path/+speed = {es_ratio:.3f}x")
         print()
     return 0
 

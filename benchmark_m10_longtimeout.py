@@ -100,12 +100,21 @@ def run(name, profile, runs=RUNS):
         base_complete += 1 if b_done else 0
         dream_complete += 1 if d_done else 0
 
+    diffs = [d - b for b, d in zip(base_pe, dream_pe)]
+
     def m(v):
         return sum(v) / len(v)
+
+    def ci(v):
+        if len(v) < 2:
+            return 0.0
+        var = sum((x - m(v)) ** 2 for x in v) / (len(v) - 1)
+        return 1.96 * math.sqrt(var / len(v))
 
     return {
         "name": name, "L": L, "timeout": timeout,
         "base_pe": m(base_pe), "dream_pe": m(dream_pe),
+        "diff_pe": m(diffs), "diff_ci": ci(diffs),
         "base_succ": sum(1 for x in base_pe if x < 0.06) / runs,
         "dream_succ": sum(1 for x in dream_pe if x < 0.06) / runs,
         "base_complete": base_complete / runs,
@@ -132,13 +141,14 @@ def main():
           f"sigma_v={SIGMA_V}, sigma_w={SIGMA_W})")
     print("=" * 104)
     print(f"{'trace':<16} {'L(m)':>6} {'timeout(s)':>11} {'N_b':>4} {'N_d':>4} "
-          f"{'PE_base':>9} {'PE_dream':>9} {'succ_b':>7} {'succ_d':>7} "
-          f"{'comp_b':>7} {'comp_d':>7}")
+          f"{'PE_base':>9} {'PE_dream':>9} {'diff(d-b)':>11} {'succ_b':>7} "
+          f"{'succ_d':>7} {'comp_b':>7} {'comp_d':>7}")
     for name, prof in cases:
         r = run(name, prof, runs=args.runs)
         print(f"{r['name']:<16} {r['L']:>6.1f} {r['timeout']:>11.1f} "
               f"{r['N_base']:>4} {r['N_dream']:>4} "
               f"{r['base_pe']:>9.3f} {r['dream_pe']:>9.3f} "
+              f"{r['diff_pe']:>+7.3f}\u00b1{r['diff_ci']:.3f} "
               f"{r['base_succ']*100:>6.0f}% {r['dream_succ']*100:>6.0f}% "
               f"{r['base_complete']*100:>6.0f}% {r['dream_complete']*100:>6.0f}%")
     return 0
