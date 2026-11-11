@@ -257,6 +257,94 @@ def opw_tr(recon, eps=0.05):
     return idx
 
 
+def _seg_sed(recon, a, b):
+    """Maximum synchronized (time-ratio) distance of points [a..b] to the
+    segment a->b (the spatiotemporal error used by SED/SQUISH-E)."""
+    ts, te = recon[a][0], recon[b][0]
+    xs, ys = recon[a][1], recon[a][2]
+    xe, ye = recon[b][1], recon[b][2]
+    dte = te - ts
+    worst = 0.0
+    for i in range(a + 1, b):
+        f = (recon[i][0] - ts) / dte if dte > 1e-12 else 0.0
+        xp = xs + f * (xe - xs)
+        yp = ys + f * (ye - ys)
+        worst = max(worst, math.hypot(recon[i][1] - xp, recon[i][2] - yp))
+    return worst
+
+
+def squish(recon, n_keep):
+    """SQUISH (budget-based spatiotemporal simplification, Muckell 2013): keep
+    exactly `n_keep` points (the two endpoints are always kept) by iteratively
+    removing the interior point whose removal causes the smallest synchronized
+    (time-ratio) error, updating its two neighbours after each removal. This is
+    the matched-budget (fixed-N) analogue of the threshold-based online PLA
+    baselines."""
+    import heapq
+    n = len(recon)
+    if n <= n_keep:
+        return list(range(n))
+    prev = [i - 1 for i in range(n)]
+    nxt = [i + 1 for i in range(n)]
+    nxt[n - 1] = -1
+    prev[0] = -1
+    removed = [False] * n
+
+    def err_of(i):
+        a, b = prev[i], nxt[i]
+        if a < 0 or b < 0:
+            return float("inf")
+        return _seg_sed(recon, a, b)
+
+    heap = [(err_of(i), i) for i in range(1, n - 1)]
+    heapq.heapify(heap)
+    kept = n
+    while kept > n_keep and heap:
+        e, i = heapq.heappop(heap)
+        if removed[i] or e != err_of(i):
+            continue
+        removed[i] = True
+        a, b = prev[i], nxt[i]
+        nxt[a] = b
+        if b >= 0:
+            prev[b] = a
+        kept -= 1
+        for j in (a, b):
+            if 0 < j < n - 1 and not removed[j]:
+                heapq.heappush(heap, (err_of(j), j))
+    return [i for i in range(n) if not removed[i]]
+
+
+def swing_slide(recon, eps=0.05):
+    """Deadband linear filter (the essence of the swing/slide filter of
+    Elmeleegy 2009, adapted to 2D): keep the current segment anchor->current;
+    points whose perpendicular distance to the segment stays within `eps` are
+    absorbed (the deadband), and a landmark is emitted only when a point
+    exceeds `eps`, at which point the segment restarts. Bounded L-infinity
+    error, causal."""
+    idx = [0]
+    anchor = 0
+    for i in range(1, len(recon)):
+        ax, ay = recon[anchor][1], recon[anchor][2]
+        bx, by = recon[i][1], recon[i][2]
+        dx, dy = bx - ax, by - ay
+        den = dx * dx + dy * dy
+        worst = 0.0
+        for j in range(anchor + 1, i):
+            px, py = recon[j][1], recon[j][2]
+            if den < 1e-12:
+                d = math.hypot(px - ax, py - ay)
+            else:
+                u = ((px - ax) * dx + (py - ay) * dy) / den
+                u = min(max(u, 0.0), 1.0)
+                d = math.hypot(px - (ax + u * dx), py - (ay + u * dy))
+            worst = max(worst, d)
+        if worst > eps:
+            idx.append(i)
+            anchor = i
+    return idx
+
+
 def heading_rmse(recon, idx):
     if len(idx) < 2:
         return float("inf")
