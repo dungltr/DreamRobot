@@ -1,0 +1,16 @@
+world,method,N,path_err,e_s_arc,e_v
+B,DREAM path-only,8,0.093163,0.008483,0.132775
+B,DREAM path+speed,9,0.092391,0.003918,0.092331
+B,gap-split (mbudget),9,0.086581,0.008483,0.132775
+B,sweep-angle,13,0.064337,0.008249,0.1311
+B,sweep-angle+speed,14,0.064337,0.001159,0.053151
+B,sweep-abs-angle@1.5 rad (mbudget),9,0.095945,0.008645,0.133926
+C,DREAM path-only,3,0.119749,0.00524,0.105286
+C,DREAM path+speed,4,0.118736,0.002997,0.080965
+C,gap-split (mbudget),4,0.109075,0.00524,0.105286
+C,sweep-angle,10,0.079413,0.005084,0.10399
+C,sweep-angle+speed,11,0.079413,0.001159,0.053151
+C,sweep-abs-angle@3 rad (mbudget),4,0.123516,0.005272,0.105556
+stress,DREAM path-only,2,0.104528,0.196753,0.11609
+stress,DREAM path+speed,8,0.031923,0.082958,0.117857
+stress,gap-split (mbudget),8,0.017372,0.082604,0.121042

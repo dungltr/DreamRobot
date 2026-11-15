@@ -10,7 +10,10 @@
 //
 //   v   <- odom linear velocity (twist.twist.linear.x)
 //   w   <- odom angular velocity (twist.twist.angular.z)
-//   d   <- Euclidean distance to the previously recorded landmark
+//   d   <- arc-length increment d = \Delta s_k to the previously recorded
+//          landmark (accumulated travelled distance integrated from the
+//          fine-grained odometry stream), i.e. the DREAM-arc payload; the
+//          Euclidean chord is recomputable at decode time from (x, y)
 //   T   <- sampling period = 1 / request->frequency
 //   psi <- request->theta (monitored yaw angle)
 //   x   <- recorded position x
@@ -54,7 +57,13 @@ public:
     latest_yaw_(0.0),
     have_last_(false),
     last_x_(0.0),
-    last_y_(0.0)
+    last_y_(0.0),
+    s_cum_(0.0),
+    have_odom_prev_(false),
+    last_odom_x_(0.0),
+    last_odom_y_(0.0),
+    have_last_s_(false),
+    last_s_(0.0)
   {
     odom_topic_ = declare_parameter<std::string>("odom_topic", "/odom");
     service_name_ = declare_parameter<std::string>("service_name", "record_landmark");
@@ -109,6 +118,20 @@ private:
       latest_odom_.pose.pose.position.y = 0.0;
       latest_odom_.pose.pose.position.z = 0.0;
     }
+
+    // Accumulate the travelled distance from the fine-grained odometry stream
+    // (chord of the small per-step displacement, which converges to the true
+    // arc length at the odometry rate). This accumulated distance is what the
+    // DREAM sampler regresses on, and its landmark-to-landmark increment is
+    // the stored `d` field (the DREAM-arc payload).
+    const double px = latest_odom_.pose.pose.position.x;
+    const double py = latest_odom_.pose.pose.position.y;
+    if (have_odom_prev_) {
+      s_cum_ += std::hypot(px - last_odom_x_, py - last_odom_y_);
+    }
+    last_odom_x_ = px;
+    last_odom_y_ = py;
+    have_odom_prev_ = true;
 
     have_odom_ = true;
     latest_yaw_ = quaternion_to_yaw(latest_odom_.pose.pose.orientation);
@@ -217,15 +240,12 @@ private:
     const double x = latest_odom_.pose.pose.position.x;
     const double y = latest_odom_.pose.pose.position.y;
 
-    double d = 0.0;
-    if (have_last_) {
-      d = std::hypot(x - last_x_, y - last_y_);
-    }
+    const double chord = have_last_ ? std::hypot(x - last_x_, y - last_y_) : 0.0;
 
     // Skip duplicate / stationary samples that carry no new path information
     // (e.g. a second sampler client, or the robot standing still). This keeps
     // the reversed back-travel from replaying useless zero-distance segments.
-    if (have_last_ && d < 1e-4) {
+    if (have_last_ && chord < 1e-4) {
       response->ret = true;
       return;
     }
@@ -233,6 +253,14 @@ private:
     last_x_ = x;
     last_y_ = y;
     have_last_ = true;
+
+    // Arc-length increment since the previous landmark (the primary distance
+    // field): the accumulated travelled distance, integrated from the
+    // fine-grained odometry stream, not the Euclidean chord. The chord remains
+    // recomputable from the stored (x, y) positions.
+    const double d = have_last_s_ ? (s_cum_ - last_s_) : 0.0;
+    last_s_ = s_cum_;
+    have_last_s_ = true;
 
     const double frequency = request->frequency;
     const double T = (frequency > 1e-6) ? (1.0 / frequency) : 0.0;
@@ -269,6 +297,14 @@ private:
   bool have_last_;
   double last_x_;
   double last_y_;
+
+  // Accumulated travelled distance (arc length) for the DREAM-arc payload.
+  double s_cum_;
+  bool have_odom_prev_;
+  double last_odom_x_;
+  double last_odom_y_;
+  bool have_last_s_;
+  double last_s_;
 
   std::vector<Landmark> landmarks_;
 };

@@ -30,6 +30,11 @@ import os
 import random
 import sys
 
+try:
+    from scipy import stats as _scipy_stats
+except Exception:  # pragma: no cover - scipy is optional
+    _scipy_stats = None
+
 _HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "src", "vslam_recovery_core", "src"))
@@ -123,6 +128,37 @@ def noisy_recon(clean, rng):
     return est
 
 
+def _mean_ci(values, z=1.96):
+    n = len(values)
+    m = sum(values) / n
+    if n < 2:
+        return m, 0.0
+    var = sum((v - m) ** 2 for v in values) / (n - 1)
+    return m, z * (var / n) ** 0.5
+
+
+def _percentile(values, p):
+    s = sorted(values)
+    if not s:
+        return float("nan")
+    k = (len(s) - 1) * p
+    lo = int(math.floor(k))
+    hi = int(math.ceil(k))
+    if lo == hi:
+        return s[lo]
+    return s[lo] + (s[hi] - s[lo]) * (k - lo)
+
+
+def _median(values):
+    return _percentile(values, 0.5)
+
+
+def _wilcoxon(a, b):
+    if _scipy_stats is None or len(a) < 2:
+        return float("nan")
+    return _scipy_stats.wilcoxon(a, b, alternative="two-sided").pvalue
+
+
 def n_es_ev(recon, idx):
     n = len(sorted(set([0] + idx + [len(recon) - 1])))
     return n, sc.arc_s_error(recon, idx), sc.arc_v_error(recon, idx)
@@ -151,6 +187,7 @@ def main():
     print("=" * 100)
     print(f"{'profile':<18} {'method':<22} {'N':>4} {'e_s arc':>9} {'e_v':>8} "
           f"{'dN(+speed)':>10}")
+    stats_rows = []
     for pname in PROFILES:
         clean = recon_from_clean(pname)
         # aggregate over noisy runs
@@ -203,7 +240,66 @@ def main():
             print(f"{pname:<18} {'path-only@mbudget':<22} {mb[0]:>4.1f} "
                   f"{mb[1]:>9.4f} {'-':>8} {'(>=N_ps)':>10}")
         print(f"  -> e_s ratio path/+speed = {es_ratio:.3f}x")
+
+        # Dispersion and paired-difference statistics (reviewer request): the
+        # per-run arrays are retained so the table is not summarized by a single
+        # mean. e_s/e_v are reported with mean +/- 95% CI, median and 90th
+        # percentile, and the temporal-channel effect is reported as the paired
+        # per-run difference (path+speed minus path-only) with its CI, the
+        # fraction of runs that improved, and a two-sided Wilcoxon signed-rank
+        # p-value when scipy is available.
+        es_p = [r[1] for r in agg["path-only"]]
+        es_s = [r[1] for r in agg["path+speed"]]
+        ev_p = [r[2] for r in agg["path-only"]]
+        ev_s = [r[2] for r in agg["path+speed"]]
+        d_es = [a - b for a, b in zip(es_s, es_p)]
+        d_ev = [a - b for a, b in zip(ev_s, ev_p)]
+        m_es_p, c_es_p = _mean_ci(es_p)
+        m_es_s, c_es_s = _mean_ci(es_s)
+        m_ev_p, c_ev_p = _mean_ci(ev_p)
+        m_ev_s, c_ev_s = _mean_ci(ev_s)
+        m_des, c_des = _mean_ci(d_es)
+        m_dev, c_dev = _mean_ci(d_ev)
+        fr_es = sum(1 for x in d_es if x < 0) / len(d_es)
+        fr_ev = sum(1 for x in d_ev if x < 0) / len(d_ev)
+        p_es = _wilcoxon(es_p, es_s)
+        p_ev = _wilcoxon(ev_p, ev_s)
+        print(f"    e_s path  {m_es_p:.4f} [{m_es_p-c_es_p:.4f},{m_es_p+c_es_p:.4f}]"
+              f" med {_median(es_p):.4f} p90 {_percentile(es_p,0.90):.4f}")
+        print(f"    e_s +spd  {m_es_s:.4f} [{m_es_s-c_es_s:.4f},{m_es_s+c_es_s:.4f}]"
+              f" med {_median(es_s):.4f} p90 {_percentile(es_s,0.90):.4f}")
+        print(f"    e_v path  {m_ev_p:.4f} [{m_ev_p-c_ev_p:.4f},{m_ev_p+c_ev_p:.4f}]"
+              f" med {_median(ev_p):.4f} p90 {_percentile(ev_p,0.90):.4f}")
+        print(f"    e_v +spd  {m_ev_s:.4f} [{m_ev_s-c_ev_s:.4f},{m_ev_s+c_ev_s:.4f}]"
+              f" med {_median(ev_s):.4f} p90 {_percentile(ev_s,0.90):.4f}")
+        print(f"    d_es {m_des:+.4f} [{m_des-c_des:.4f},{m_des+c_des:.4f}] "
+              f"imp {fr_es:.0%} p {p_es:.3g}")
+        print(f"    d_ev {m_dev:+.4f} [{m_dev-c_dev:.4f},{m_dev+c_dev:.4f}] "
+              f"imp {fr_ev:.0%} p {p_ev:.3g}")
+        stats_rows.append([pname, m_es_p, c_es_p, _median(es_p),
+                           _percentile(es_p, 0.90), m_es_s, c_es_s,
+                           _median(es_s), _percentile(es_s, 0.90), m_ev_p,
+                           c_ev_p, _median(ev_p), _percentile(ev_p, 0.90),
+                           m_ev_s, c_ev_s, _median(ev_s),
+                           _percentile(ev_s, 0.90), m_des, c_des, fr_es,
+                           p_es, m_dev, c_dev, fr_ev, p_ev])
         print()
+
+    out = os.path.join(_HERE, "bench_data", "mc1_speedprofiles_stats.csv")
+    with open(out, "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["profile", "e_s_path_mean", "e_s_path_ci", "e_s_path_med",
+                    "e_s_path_p90", "e_s_speed_mean", "e_s_speed_ci",
+                    "e_s_speed_med", "e_s_speed_p90", "e_v_path_mean",
+                    "e_v_path_ci", "e_v_path_med", "e_v_path_p90",
+                    "e_v_speed_mean", "e_v_speed_ci", "e_v_speed_med",
+                    "e_v_speed_p90", "d_es_mean", "d_es_ci", "d_es_improve",
+                    "d_es_p", "d_ev_mean", "d_ev_ci", "d_ev_improve",
+                    "d_ev_p"])
+        for r in stats_rows:
+            w.writerow([round(float(x), 6) if not isinstance(x, str) else x
+                        for x in r])
+    print(f"[OK] wrote {out}")
     return 0
 
 

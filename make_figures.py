@@ -179,7 +179,11 @@ def fig_reconstruction():
         ax.axvline(t[i], color="red", lw=0.4, alpha=0.4)
     ax.set_xlabel("time [s]")
     ax.set_ylabel("$\\psi$ [rad]")
-    ax.legend(fontsize=9, loc="upper right")
+    #ax.legend(fontsize=9, loc="upper right")
+    # Nâng legend lên phía trên viền đồ thị và dàn hàng ngang
+    ax.legend(
+        fontsize=9, loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=3
+    )
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, "fig3_reconstruction.pdf"),
@@ -321,7 +325,11 @@ def fig_landmarks():
             "rs", ms=6, label=f"DREAM ($N$={len(d_idx)})")
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
-    ax.legend(fontsize=9)
+    #ax.legend(fontsize=9)
+    # Nâng legend lên phía trên viền đồ thị và dàn hàng ngang
+    ax.legend(
+        fontsize=9, loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=3
+    )
     ax.set_aspect("equal")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -405,7 +413,11 @@ def fig_return_path():
     ax.plot(ret_x[-1], ret_y[-1], "r*", ms=10, label="return end")
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
-    ax.legend(fontsize=9)
+    #ax.legend(fontsize=9)
+    # Nâng legend lên phía trên viền đồ thị và dàn hàng ngang
+    ax.legend(
+        fontsize=9, loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=3
+    )
     ax.set_aspect("equal")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
