@@ -107,7 +107,7 @@ def main():
 
     print("\n(S2) constant gyro bias (sigma_v=0.01, sigma_omega=0.02)")
     for name in "ABC":
-        for bias in (0.005, 0.01, 0.02):
+        for bias in (0.0005, 0.001, 0.002, 0.003, 0.004, 0.005, 0.01, 0.02):
             pes = two_state_pe(name, 0.01, 0.02, gyro_bias=bias)
             m = sum(pes) / len(pes)
             print(f"  {name} bias={bias}: mean={m:.4f} m, success={succ(pes)*100:.0f}%")
