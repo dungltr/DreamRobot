@@ -29,6 +29,7 @@ Offline:  python3 benchmark_matched_budget.py
 import csv
 import math
 import os
+import random
 import sys
 
 _HERE = os.path.dirname(os.path.realpath(__file__))
@@ -76,6 +77,95 @@ def report(recon, idx):
     es = sc.arc_s_error(recon, idx)
     ev = sc.arc_v_error(recon, idx)
     return n, worst, es, ev
+
+
+def noisy_recon(recon, rng, sigma_v=0.01, sigma_w=0.02):
+    """Re-integrate a clean recon (t, x, y, psi, s, v) under additive white
+    odometry noise, reconstructing the angular rate from the psi differences."""
+    raw = []
+    prev_psi = 0.0
+    prev_t = None
+    for (t, x, y, psi, s, v) in recon:
+        w = 0.0
+        if prev_t is not None and (t - prev_t) > 0:
+            d = psi - prev_psi
+            while d > math.pi:
+                d -= 2.0 * math.pi
+            while d < -math.pi:
+                d += 2.0 * math.pi
+            w = d / (t - prev_t)
+        raw.append((t, x, y, v, w))
+        prev_psi = psi
+        prev_t = t
+    est = []
+    x = y = psi = s = 0.0
+    prev = None
+    for (t, _x, _y, v, w) in raw:
+        dt = t - prev if prev is not None else 0.0
+        vn = max(0.0, v + sigma_v * rng.gauss(0.0, 1.0))
+        wn = w + sigma_w * rng.gauss(0.0, 1.0)
+        if prev is not None and 0.0 < dt < 0.5:
+            psi += wn * dt
+            x += vn * math.cos(psi) * dt
+            y += vn * math.sin(psi) * dt
+            s += vn * dt
+        est.append((t, x, y, psi, s, vn))
+        prev = t
+    return est
+
+
+def _ci(values, z=1.96):
+    n = len(values)
+    m = sum(values) / n
+    if n < 2:
+        return m, 0.0
+    var = sum((v - m) ** 2 for v in values) / (n - 1)
+    return m, z * (var / n) ** 0.5
+
+
+def run_mc(runs=30, sigma_v=0.01, sigma_w=0.02):
+    """Matched-budget comparison under Monte-Carlo odometry noise: at its fixed
+    threshold each method is run on `runs` re-integrated trajectories and the
+    mean +/- 95% CI is reported, so the matched-budget claim carries uncertainty
+    rather than resting on the clean single run of main()."""
+    print("\n" + "=" * 96)
+    print(f"Matched-budget comparison under noise ({runs} runs, "
+          f"sigma_v={sigma_v}, sigma_w={sigma_w})")
+    print("=" * 96)
+    rows = []
+    for name, ang in (("B", 1.5), ("C", 3.0)):
+        clean = load_recon(name)
+        agg = {"path-only": [], "path+speed": [], "sweep-abs": []}
+        for run in range(runs):
+            rng = random.Random(7000 + run)
+            recon = noisy_recon(clean, rng, sigma_v, sigma_w)
+            po = rb.dream_sampler(recon, r2_threshold=0.98, regress_speed=False)
+            ps = rb.dream_sampler(recon, r2_threshold=0.98, regress_speed=True)
+            ab = bb.sweep_abs_angle(recon, angle=ang)
+            agg["path-only"].append(report(recon, po))
+            agg["path+speed"].append(report(recon, ps))
+            agg["sweep-abs"].append(report(recon, ab))
+        for key, label in (("path-only", "DREAM path-only"),
+                           ("path+speed", "DREAM path+speed"),
+                           ("sweep-abs", f"sweep-abs @{ang:g} rad (mbudget)")):
+            rs = agg[key]
+            n_m, n_c = _ci([r[0] for r in rs])
+            p_m, p_c = _ci([r[1] for r in rs])
+            s_m, s_c = _ci([r[2] for r in rs])
+            v_m, v_c = _ci([r[3] for r in rs])
+            print(f"{name:<3} {label:<26} N={n_m:5.1f}+-{n_c:4.1f} "
+                  f"path={p_m:6.4f}+-{p_c:6.4f} e_s={s_m:6.4f}+-{s_c:6.4f} "
+                  f"e_v={v_m:6.4f}+-{v_c:6.4f}")
+            rows.append([name, label, n_m, n_c, p_m, p_c, s_m, s_c, v_m, v_c])
+    out = os.path.join(_HERE, "bench_data", "matched_budget_mc.csv")
+    with open(out, "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["world", "method", "N_mean", "N_ci", "path_mean",
+                    "path_ci", "e_s_mean", "e_s_ci", "e_v_mean", "e_v_ci"])
+        for r in rows:
+            w.writerow([round(float(x), 6) if not isinstance(x, str) else x
+                        for x in r])
+    print(f"[OK] wrote {out}")
 
 
 def main():
@@ -134,6 +224,7 @@ def main():
             w.writerow([r[0], r[1], r[2], round(r[3], 6), round(r[4], 6),
                         round(r[5], 6)])
     print(f"[OK] wrote {out}")
+    run_mc()
 
 
 def stress_recon():
