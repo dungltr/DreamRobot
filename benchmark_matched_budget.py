@@ -133,6 +133,7 @@ def run_mc(runs=30, sigma_v=0.01, sigma_w=0.02):
           f"sigma_v={sigma_v}, sigma_w={sigma_w})")
     print("=" * 96)
     rows = []
+    paired_rows = []
     for name, ang in (("B", 1.5), ("C", 3.0)):
         clean = load_recon(name)
         agg = {"path-only": [], "path+speed": [], "sweep-abs": []}
@@ -157,6 +158,22 @@ def run_mc(runs=30, sigma_v=0.01, sigma_w=0.02):
                   f"path={p_m:6.4f}+-{p_c:6.4f} e_s={s_m:6.4f}+-{s_c:6.4f} "
                   f"e_v={v_m:6.4f}+-{v_c:6.4f}")
             rows.append([name, label, n_m, n_c, p_m, p_c, s_m, s_c, v_m, v_c])
+
+        # paired per-run differences (DREAM path+speed - sweep-abs) on the same
+        # trajectory/run, so the temporal-channel effect carries a paired CI
+        # rather than being inferred from non-overlapping marginal CIs.
+        ps = agg["path+speed"]
+        ab = agg["sweep-abs"]
+        d_es = [a[2] - b[2] for a, b in zip(ps, ab)]
+        d_ev = [a[3] - b[3] for a, b in zip(ps, ab)]
+        m_es, c_es = _ci(d_es)
+        m_ev, c_ev = _ci(d_ev)
+        fr_es = sum(1 for x in d_es if x < 0) / len(d_es)
+        fr_ev = sum(1 for x in d_ev if x < 0) / len(d_ev)
+        print(f"{name:<3} paired path+speed-sweepabs: "
+              f"d_es={m_es:+.4f}+-{c_es:.4f} (improve {fr_es*100:.0f}%)  "
+              f"d_ev={m_ev:+.4f}+-{c_ev:.4f} (improve {fr_ev*100:.0f}%)")
+        paired_rows.append([name, m_es, c_es, fr_es, m_ev, c_ev, fr_ev])
     out = os.path.join(_HERE, "bench_data", "matched_budget_mc.csv")
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh)
@@ -165,7 +182,16 @@ def run_mc(runs=30, sigma_v=0.01, sigma_w=0.02):
         for r in rows:
             w.writerow([round(float(x), 6) if not isinstance(x, str) else x
                         for x in r])
-    print(f"[OK] wrote {out}")
+    out2 = os.path.join(_HERE, "bench_data", "matched_budget_mc_paired.csv")
+    with open(out2, "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["world", "d_es_mean", "d_es_ci", "d_es_improve",
+                    "d_ev_mean", "d_ev_ci", "d_ev_improve"])
+        for r in paired_rows:
+            w.writerow([r[0], round(r[1], 6), round(r[2], 6),
+                        round(r[3], 6), round(r[4], 6), round(r[5], 6),
+                        round(r[6], 6)])
+    print(f"[OK] wrote {out} and {out2}")
 
 
 def main():
