@@ -644,91 +644,19 @@ def recovery_pe_closed_loop_noisy(recon, landmarks_idx, sigma_v, sigma_w, rng):
 
 def recovery_pe_closed_loop_noisy_2state(true_recon, est_recon, landmarks_idx,
                                          sigma_v, sigma_w, rng):
-    """Two-state closed-loop reverse replay that *retains* the forward-phase
-    drift. The true pose follows the recorded (clean) forward trajectory and
-    starts the return at its true forward endpoint; the dead-reckoned estimate
-    follows the noise-integrated forward trajectory and starts the return at
-    its drifted endpoint (the two are NOT collapsed at camera loss). Waypoints
-    are the estimate positions at the landmark indices (odometry-only), and the
-    return path is built in the estimate frame. Returns a tuple
-    (pe_true, pe_odom, completed, timed_out)."""
-    # A single landmark (the start) still yields a camera-loss-pose -> origin
-    # return polyline in the estimate frame; only an empty set is unevaluable.
-    if len(landmarks_idx) < 1:
-        return float("inf"), float("inf"), False, True
-
-    forward = [(est_recon[i][1], est_recon[i][2]) for i in landmarks_idx]
-
-    x = true_recon[-1][1]
-    y = true_recon[-1][2]
-    yaw = true_recon[-1][3]
-    x_est = est_recon[-1][1]
-    y_est = est_recon[-1][2]
-    yaw_est = est_recon[-1][3]
-
-    dt = 1.0 / 50.0
-    kBaseSpeed = 0.12
-    kLookahead = 0.45
-    kFinalTolerance = 0.03
-
-    # Pi-turn (closed-loop on the estimated heading).
-    target = _norm_angle(yaw_est + math.pi)
-    rt = 0.0
-    while rt < 12.0:
-        err = _norm_angle(target - yaw_est)
-        if abs(err) < 0.03:
-            break
-        w = _clamp(2.0 * err, -0.8, 0.8)
-        yaw = _norm_angle(yaw + w * dt)
-        yaw_est = _norm_angle(yaw_est + (w + sigma_w * rng.gauss(0.0, 1.0)) * dt)
-        rt += dt
-
-    path = [(x_est, y_est)] + list(reversed(forward))
-    if math.hypot(path[-1][0], path[-1][1]) > 1e-3:
-        path.append((0.0, 0.0))
-    samples = _polyline_samples(path)
-
-    last_v = 0.0
-    last_w = 0.0
-    t = 0.0
-    while t < 180.0:
-        dstart_est = math.hypot(x_est, y_est)
-        if dstart_est < kFinalTolerance:
-            break
-        gx, gy = _lookahead_goal(x_est, y_est, samples, kLookahead)
-        alpha = _norm_angle(math.atan2(gy - y_est, gx - x_est) - yaw_est)
-
-        v_des = kBaseSpeed * max(0.0, math.cos(alpha))
-        approach = _clamp(dstart_est / 0.4, 0.0, 1.0)
-        v_des = min(v_des, max(0.02, kBaseSpeed * approach))
-
-        w_des = 2.0 * v_des * math.sin(alpha) / max(kLookahead, 1e-3)
-        w_des = _clamp(w_des, -0.25, 0.25)
-
-        v = _slew(last_v, v_des, 0.20 * dt)
-        w = _slew(last_w, w_des, 0.50 * dt)
-        last_v = v
-        last_w = w
-        v = max(0.0, v)
-        w = _clamp(w, -0.25, 0.25)
-
-        # True pose integrates the commanded velocities.
-        x += v * math.cos(yaw) * dt
-        y += v * math.sin(yaw) * dt
-        yaw = _norm_angle(yaw + w * dt)
-
-        # Odometry estimate integrates noisy velocities (dead-reckoning drift).
-        vn = v + sigma_v * rng.gauss(0.0, 1.0)
-        wn = w + sigma_w * rng.gauss(0.0, 1.0)
-        x_est += vn * math.cos(yaw_est) * dt
-        y_est += vn * math.sin(yaw_est) * dt
-        yaw_est = _norm_angle(yaw_est + wn * dt)
-
-        t += dt
-    pe_true = math.hypot(x, y)
-    pe_odom = math.hypot(x_est, y_est)
-    completed = pe_odom < 0.03
-    timed_out = not completed
+    """Two-state closed-loop reverse replay (single canonical engine). Thin
+    wrapper over benchmark_m5_noise.two_state_return so the headline two-state
+    study uses the SAME engine as the extended noise, corrected-frame,
+    trajectory-generalization and long-trace studies. No process/scale/bias
+    terms here; return-phase timeout 180 s. Returns (pe_true, pe_odom,
+    completed, timed_out)."""
+    import benchmark_m5_noise as _m5  # lazy import avoids circular dependency
+    pe_true, pe_odom, _clearance, completed, timed_out = \
+        _m5.two_state_return(true_recon, est_recon, landmarks_idx,
+                             sigma_v=sigma_v, sigma_w=sigma_w, rng=rng,
+                             gyro_bias=0.0, wheel_scale=0.0, gyro_scale=0.0,
+                             process_v=0.0, process_w=0.0,
+                             timeout=180.0, turn_timeout=12.0)
     return pe_true, pe_odom, completed, timed_out
 
 

@@ -44,86 +44,20 @@ def _load(name):
 
 def _crn_two_state(true_recon, est_recon, landmarks_idx, sigma_v, sigma_w,
                    noise_v, noise_w):
-    """Two-state reverse replay with common random numbers: noise is drawn from
-    the pre-generated arrays `noise_v`/`noise_w` indexed by a step counter, so
-    two calls with the same arrays consume identical noise at each step."""
-    if len(landmarks_idx) < 1:
-        return float("inf"), float("inf"), False, True
-
-    forward = [(est_recon[i][1], est_recon[i][2]) for i in landmarks_idx]
-
-    x = true_recon[-1][1]
-    y = true_recon[-1][2]
-    yaw = true_recon[-1][3]
-    x_est = est_recon[-1][1]
-    y_est = est_recon[-1][2]
-    yaw_est = est_recon[-1][3]
-
-    dt = 1.0 / 50.0
-    kBaseSpeed = 0.12
-    kLookahead = 0.45
-    kFinalTolerance = 0.03
-
-    k = 0  # common noise step counter
-
-    target = rb._norm_angle(yaw_est + math.pi)
-    rt = 0.0
-    while rt < 12.0:
-        err = rb._norm_angle(target - yaw_est)
-        if abs(err) < 0.03:
-            break
-        w = rb._clamp(2.0 * err, -0.8, 0.8)
-        yaw = rb._norm_angle(yaw + w * dt)
-        wn = w + sigma_w * noise_w[k]
-        yaw_est = rb._norm_angle(yaw_est + wn * dt)
-        k += 1
-        rt += dt
-
-    path = [(x_est, y_est)] + list(reversed(forward))
-    if math.hypot(path[-1][0], path[-1][1]) > 1e-3:
-        path.append((0.0, 0.0))
-    samples = rb._polyline_samples(path)
-
-    last_v = 0.0
-    last_w = 0.0
-    t = 0.0
-    while t < 180.0:
-        dstart_est = math.hypot(x_est, y_est)
-        if dstart_est < kFinalTolerance:
-            break
-        gx, gy = rb._lookahead_goal(x_est, y_est, samples, kLookahead)
-        alpha = rb._norm_angle(math.atan2(gy - y_est, gx - x_est) - yaw_est)
-
-        v_des = kBaseSpeed * max(0.0, math.cos(alpha))
-        approach = rb._clamp(dstart_est / 0.4, 0.0, 1.0)
-        v_des = min(v_des, max(0.02, kBaseSpeed * approach))
-
-        w_des = 2.0 * v_des * math.sin(alpha) / max(kLookahead, 1e-3)
-        w_des = rb._clamp(w_des, -0.25, 0.25)
-
-        v = rb._slew(last_v, v_des, 0.20 * dt)
-        w = rb._slew(last_w, w_des, 0.50 * dt)
-        last_v = v
-        last_w = w
-        v = max(0.0, v)
-        w = rb._clamp(w, -0.25, 0.25)
-
-        x += v * math.cos(yaw) * dt
-        y += v * math.sin(yaw) * dt
-        yaw = rb._norm_angle(yaw + w * dt)
-
-        vn = v + sigma_v * noise_v[k]
-        wn = w + sigma_w * noise_w[k]
-        x_est += vn * math.cos(yaw_est) * dt
-        y_est += vn * math.sin(yaw_est) * dt
-        yaw_est = rb._norm_angle(yaw_est + wn * dt)
-        k += 1
-        t += dt
-
-    return math.hypot(x, y), math.hypot(x_est, y_est), \
-        math.hypot(x_est, y_est) < 0.03, math.hypot(x_est, y_est) >= 0.03
-
-
+    """CRN two-state reverse replay: delegates to the single canonical engine
+    (benchmark_m5_noise.two_state_return) with pre-generated measurement-noise
+    arrays, so two calls with the same arrays consume identical per-step noise.
+    A dummy RNG is passed for the (zero) process-noise terms."""
+    import benchmark_m5_noise as m5  # local import avoids circular dependency
+    dummy = random.Random(12345)
+    pe_true, pe_odom, _clearance, completed, timed_out = \
+        m5.two_state_return(true_recon, est_recon, landmarks_idx,
+                            sigma_v=sigma_v, sigma_w=sigma_w, rng=dummy,
+                            gyro_bias=0.0, wheel_scale=0.0, gyro_scale=0.0,
+                            process_v=0.0, process_w=0.0,
+                            timeout=180.0, turn_timeout=12.0,
+                            noise_v=noise_v, noise_w=noise_w)
+    return pe_true, pe_odom, completed, timed_out
 def _percentile(a, p):
     s = sorted(a)
     k = (len(s) - 1) * p

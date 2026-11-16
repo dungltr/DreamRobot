@@ -101,8 +101,10 @@ def forward_estimate(raw, sigma_v, sigma_w, rng, gyro_bias=0.0,
         dt = t - prev if prev is not None else 0.0
         vn = max(0.0, (1.0 + wheel_scale) * v + sigma_v * rng.gauss(0.0, 1.0))
         if 0.0 < dt < 0.5:
-            rw += arw * rng.gauss(0.0, 1.0) * math.sqrt(dt)
-            bias += bias_instability * rng.gauss(0.0, 1.0) * math.sqrt(dt)
+            if arw != 0.0:
+                rw += arw * rng.gauss(0.0, 1.0) * math.sqrt(dt)
+            if bias_instability != 0.0:
+                bias += bias_instability * rng.gauss(0.0, 1.0) * math.sqrt(dt)
         wn = (1.0 + gyro_scale) * w + gyro_bias + bias + rw + sigma_w * rng.gauss(0.0, 1.0)
         if prev is not None and 0.0 < dt < 0.5:
             psi += wn * dt
@@ -117,7 +119,7 @@ def forward_estimate(raw, sigma_v, sigma_w, rng, gyro_bias=0.0,
 def two_state_return(true_recon, est_recon, landmarks_idx, sigma_v, sigma_w,
                      rng, gyro_bias=0.0, wheel_scale=0.0, gyro_scale=0.0,
                      process_v=0.0, process_w=0.0, timeout=180.0,
-                     turn_timeout=12.0):
+                     turn_timeout=12.0, noise_v=None, noise_w=None):
     """Two-state progress-constrained pure-pursuit return.
 
     True pose: integrates the commanded velocity perturbed by PROCESS noise
@@ -147,6 +149,27 @@ def two_state_return(true_recon, est_recon, landmarks_idx, sigma_v, sigma_w,
     kLookahead = 0.45
     kFinalTolerance = 0.03
 
+    # Common-random-number mode: measurement noise (sigma_v / sigma_w) is drawn
+    # from pre-generated arrays indexed by a shared step counter, so two calls
+    # with the same arrays consume identical per-step measurement noise. Process
+    # noise still draws from `rng` (it is zero in the CRN paired study).
+    use_crn = noise_v is not None and noise_w is not None
+    meas_k = [0]
+
+    def mv():
+        if use_crn:
+            val = noise_v[meas_k[0]]
+            meas_k[0] += 1
+            return val
+        return rng.gauss(0.0, 1.0)
+
+    def mw():
+        if use_crn:
+            val = noise_w[meas_k[0]]
+            meas_k[0] += 1
+            return val
+        return rng.gauss(0.0, 1.0)
+
     target = norm(yaw_est + math.pi)
     rt = 0.0
     while rt < turn_timeout:
@@ -156,7 +179,7 @@ def two_state_return(true_recon, est_recon, landmarks_idx, sigma_v, sigma_w,
         w = clamp(2.0 * err, -0.8, 0.8)
         yaw = norm(yaw + (w + process_w * rng.gauss(0.0, 1.0)) * dt)
         yaw_est = norm(yaw_est + ((1.0 + gyro_scale) * w + gyro_bias +
-                                  sigma_w * rng.gauss(0.0, 1.0)) * dt)
+                                  sigma_w * mw()) * dt)
         rt += dt
 
     path = [(x_est, y_est)] + list(reversed(forward))
@@ -214,8 +237,8 @@ def two_state_return(true_recon, est_recon, landmarks_idx, sigma_v, sigma_w,
         yaw = norm(yaw + (w + process_w * rng.gauss(0.0, 1.0)) * dt)
 
         # estimate: measured velocity (scale + bias + sensor noise)
-        vn = (1.0 + wheel_scale) * v + sigma_v * rng.gauss(0.0, 1.0)
-        wn = (1.0 + gyro_scale) * w + gyro_bias + sigma_w * rng.gauss(0.0, 1.0)
+        vn = (1.0 + wheel_scale) * v + sigma_v * mv()
+        wn = (1.0 + gyro_scale) * w + gyro_bias + sigma_w * mw()
         x_est += max(0.0, vn) * math.cos(yaw_est) * dt
         y_est += max(0.0, vn) * math.sin(yaw_est) * dt
         yaw_est = norm(yaw_est + wn * dt)
