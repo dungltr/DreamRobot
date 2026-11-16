@@ -70,7 +70,7 @@ def inner_corner(theta, hw):
     return (L - hw * math.tan(theta / 2.0), hw)
 
 
-def simulate_return(recon, idx, corner):
+def simulate_return(recon, idx, corner, theta=None, hw=None):
     """Closed-loop pure-pursuit return (matches benchmark_m8_corner.py);
     returns the final error and the minimum footprint clearance to the inner
     corner."""
@@ -158,39 +158,65 @@ def simulate_return(recon, idx, corner):
         yaw = norm(yaw + w * dt)
         t += dt
         track.append((x, y, yaw))
-    return math.hypot(x, y), corner_clearance(track, corner)
+    return math.hypot(x, y), corner_clearance(track, corner, theta, hw)
 
 
-def corner_clearance(track, corner):
-    """Minimum distance from the inner corner *point* to the robot footprint
-    rectangle (0.30 x 0.20 m, rotated by the robot heading) over the whole
-    return track. This is a true body-to-obstacle clearance: 0 means the corner
-    point lies on the rectangle boundary, and a negative signed value means it
-    lies inside the rectangle. Returns (min_separation, contact) where
-    `contact` is True iff the point entered the rectangle at any pose.
+def inner_wall_segments(theta, hw):
+    """Inner (concave) wall polyline of the left-turn L-corner: two segments
+    meeting at the inner corner. Segment 1 is the first arm's inner edge; segment
+    2 is the second arm's inner edge. Returns a list of (A, B) line segments."""
+    c = inner_corner(theta, hw)
+    # first arm inner wall runs along +x at y = hw up to the corner
+    a1 = (0.0, hw)
+    # second arm inner wall extends from the corner along the turn direction
+    a2 = (c[0] + L * math.cos(theta), c[1] + L * math.sin(theta))
+    return [(a1, c), (c, a2)]
 
-    The point-to-rectangle separation is computed by transforming the corner
-    point into the robot body frame (translate by -pose, rotate by -yaw) and
-    measuring the distance to the [-HW,HW] x [-HD,HD] rectangle."""
+
+def _point_seg_dist(px, py, ax, ay, bx, by):
+    dx, dy = bx - ax, by - ay
+    den = dx * dx + dy * dy
+    u = 0.0 if den < 1e-12 else ((px - ax) * dx + (py - ay) * dy) / den
+    u = min(max(u, 0.0), 1.0)
+    return math.hypot(px - (ax + u * dx), py - (ay + u * dy))
+
+
+def corner_clearance(track, corner, theta=None, hw=None):
+    """Minimum distance from the inner wall polyline (the corner point plus the
+    two wall segments) to the robot footprint rectangle over the whole return
+    track. The distance is computed per footprint pose in the body frame: a
+    wall point inside the rectangle gives penetration (signed <= 0), otherwise
+    the gap is the positive point-to-rectangle distance. Returns
+    (min_separation, contact); contact is True iff any wall point entered the
+    rectangle at any pose. If theta/hw are given, the full wall polyline is
+    used instead of only the corner point."""
+    walls = [corner]
+    if theta is not None and hw is not None:
+        for (a, b) in inner_wall_segments(theta, hw):
+            seg_len = math.hypot(b[0] - a[0], b[1] - a[1])
+            n = max(1, int(math.ceil(seg_len / 0.02)))
+            for j in range(n + 1):
+                f = j / n
+                walls.append((a[0] + (b[0] - a[0]) * f,
+                              a[1] + (b[1] - a[1]) * f))
     min_sep = float("inf")
     contact = False
     for (x, y, yaw) in track:
         c = math.cos(yaw)
         s = math.sin(yaw)
-        dx = corner[0] - x
-        dy = corner[1] - y
-        lx = dx * c + dy * s
-        ly = -dx * s + dy * c
-        qx = abs(lx) - ROBOT_HW
-        qy = abs(ly) - ROBOT_HD
-        if qx <= 0.0 and qy <= 0.0:
-            # corner point inside the footprint -> penetration
-            pen = -min(abs(qx), abs(qy))
-            min_sep = min(min_sep, 0.0)
-            contact = True
-        else:
-            sep = math.hypot(max(qx, 0.0), max(qy, 0.0))
-            min_sep = min(min_sep, sep)
+        for (wx, wy) in walls:
+            dx = wx - x
+            dy = wy - y
+            lx = dx * c + dy * s
+            ly = -dx * s + dy * c
+            qx = abs(lx) - ROBOT_HW
+            qy = abs(ly) - ROBOT_HD
+            if qx <= 0.0 and qy <= 0.0:
+                min_sep = min(min_sep, 0.0)
+                contact = True
+            else:
+                sep = math.hypot(max(qx, 0.0), max(qy, 0.0))
+                min_sep = min(min_sep, sep)
     return min_sep, contact
 
 
@@ -241,7 +267,7 @@ def main():
                 ("segment-error 0.10", bb.segment_error(recon, eps=0.10)),
                 ("Douglas-Peucker 0.05", bb.douglas_peucker(recon, eps=0.05)),
             ]:
-                fe, (clr, contact) = simulate_return(recon, idx, corner)
+                fe, (clr, contact) = simulate_return(recon, idx, corner, theta, hw)
                 print(f"{theta_deg:>5} {hw:>5.2f} {name:<24} {len(idx):>4} "
                       f"{fe:>8.3f} {clr:>9.3f} {'YES' if contact else 'no'}")
     return 0
