@@ -168,8 +168,83 @@ def analytic_lemma_table():
         print(f"  {q:>5.2f} {L:>9.6f} {L_lead:>9.6f} {L_next:>9.6f} {rel:>12.2f}%")
 
 
+def _continuous_L(q):
+    """Exact continuous path linearity of a uniform circular arc of sweep q."""
+    lt = 0.5 - math.sin(q) / (2.0 * q)
+    ln = 0.5 + math.sin(q) / (2.0 * q) - (2.0 * math.sin(q / 2.0) / q) ** 2
+    return lt / (lt + ln)
+
+
+def _discrete_arc_points(kappa, q, dt=0.01, v=0.2):
+    """Return (x, y) points of a time-uniform circular arc (same grid as the
+    deployed sampler) spanning sweep angle q."""
+    R = 1.0 / kappa
+    dpsi = kappa * v * dt
+    pts = []
+    psi = 0.0
+    while psi <= q + 1e-12:
+        pts.append((R * math.sin(psi), R * (1.0 - math.cos(psi))))
+        psi += dpsi
+    return pts
+
+
+def _discrete_linearity(kappa, q, dt=0.01, v=0.2):
+    """Path linearity of the discrete sampled arc (the deployed accumulator)."""
+    acc = dream_core.PathLinearityAccumulator()
+    for x, y in _discrete_arc_points(kappa, q, dt, v):
+        acc.add(x, y)
+    return acc.linearity()
+
+
+def _root(f, lo, hi, tol=1e-12, maxit=200):
+    """Bisection root of monotone-decreasing f on [lo, hi]."""
+    flo, fhi = f(lo), f(hi)
+    for _ in range(maxit):
+        mid = 0.5 * (lo + hi)
+        fm = f(mid)
+        if abs(fm) < tol or (hi - lo) < tol:
+            return mid
+        if (flo > 0) == (fm > 0):
+            lo, flo = mid, fm
+        else:
+            hi, fhi = mid, fm
+    return 0.5 * (lo + hi)
+
+
+def sweep_angle_decomposition(tau=0.98, dt=0.01, v=0.2):
+    """Separate the finite-sample (discrete-grid) covariance shift from the
+    continuous root: q_cont (continuous L(q)=tau), q_disc (discrete-grid
+    L(q)=tau on the same sample grid), and q_meas (deployed trigger)."""
+    q_cont = _root(lambda q: _continuous_L(q) - tau, 1e-6, 2.0)
+    q_th = math.sqrt(60.0 * (1.0 - tau))
+    print("\nSweep-angle decomposition (finite-grid vs continuous, tau=0.98):")
+    print(f"  q_cont = {q_cont:.6f} rad;  q_th (leading) = {q_th:.6f} rad")
+    print(f"  {'kappa':>6} {'q_meas':>9} {'q_cont':>9} {'q_disc':>9} "
+          f"{'d(meas-cont)%':>13} {'d(disc-cont)%':>13} {'d(meas-disc)%':>13}")
+    for kappa in (0.5, 1.0, 2.0, 3.0):
+        q_disc = _root(lambda q: _discrete_linearity(kappa, q, dt, v) - tau,
+                       1e-6, 2.0)
+        # deployed trigger sweep angle (second event, path-only, uncapped)
+        recon = discrete_arc(kappa, 5.0)
+        sampler = dream_core.DreamSampler(r2_threshold=tau, regress_speed=False,
+                                          max_window_size=5000)
+        events = []
+        anchor_s = 0.0
+        for (t, x, y, psi, s, vv) in recon:
+            if sampler.update(t, x, y, s):
+                events.append(s - anchor_s)
+                anchor_s = s
+        q_meas = kappa * events[1]
+        dmc = (q_meas - q_cont) / q_cont * 100.0
+        ddc = (q_disc - q_cont) / q_cont * 100.0
+        dmd = (q_meas - q_disc) / q_disc * 100.0
+        print(f"  {kappa:>6.2f} {q_meas:>9.4f} {q_cont:>9.4f} {q_disc:>9.4f} "
+              f"{dmc:>12.3f}% {ddc:>12.3f}% {dmd:>12.3f}%")
+
+
 def run_theory_validation():
     analytic_lemma_table()
+    sweep_angle_decomposition()
     print("\nTheory validation (deployed sampler on discrete arcs, R^2_th=0.98):")
     q_th = math.sqrt(60 * (1 - 0.98))
     print(f"  q_th = sqrt(60*(1-0.98)) = {q_th:.4f} rad")
