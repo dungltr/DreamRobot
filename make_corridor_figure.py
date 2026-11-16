@@ -231,7 +231,10 @@ def main():
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
     ax.set_aspect("equal")
-    ax.legend(fontsize=7, loc="upper left", ncol=2)
+    #ax.legend(fontsize=7, loc="upper left", ncol=2)
+    ax.legend(
+        fontsize=9, loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=3
+    )
     ax.grid(True, alpha=0.25)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, "fig9_corridor_demo.pdf"), bbox_inches="tight")
