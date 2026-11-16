@@ -1,0 +1,11 @@
+method,N_landmarks,total_s,us_per_sample,peak_alloc_B
+DREAM (tau=0.98),3,0.004045,2.387,17390
+two-rate (0.5/1.0 Hz),33,0.000542,0.32,2004
+sweep-angle (0.5 rad),9,0.000232,0.137,464
+sweep-abs-angle (0.5 rad),16,0.000231,0.136,660
+segment-error (0.05 m),8,0.068372,40.338,2644
+online-PLA (0.05 m),8,0.065498,38.642,7972
+SWAB (0.05 m),10,0.319835,188.693,27856
+OPW-TR (0.05 m),8,0.05118,30.195,516
+swing/slide (0.05 m),6,0.129082,76.154,536
+SQUISH-E (budget=3),3,0.036637,21.615,216272
