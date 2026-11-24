@@ -797,6 +797,18 @@ def compare(csv_path, name):
             "pe_dream_cl": pe_d_cl}
 
 
+def _complete_waypoint_count(landmarks_idx, n_samples):
+    """Complete waypoint set = sorted unique {0} U sampler output U {n-1}.
+
+    ``N_sampler`` is the raw sampler output; ``N_stored`` is the
+    boundary-inclusive count used by tab:drpe/tab:protocol, matching the
+    manuscript convention N_stored = N_sampler + I_start + I_end with
+    I_start, I_end in {0,1}."""
+    if n_samples <= 0:
+        return 0
+    return len(set([0] + list(landmarks_idx) + [n_samples - 1]))
+
+
 # ---------------------------------------------------------------------------
 # Noise robustness (reviewer round-7 additions)
 # ---------------------------------------------------------------------------
@@ -814,6 +826,7 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
     print(f"Noise robustness (runs={runs}, sigma_v={sigma_v}, sigma_w={sigma_w})")
     print("=" * 78)
     import random
+    rows = []
     for name, _w in WORLDS:
         csv_path = os.path.join(_DATA_DIR, f"odom_{name}.csv")
         raw = []
@@ -822,6 +835,7 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
                 if row:
                     raw.append(tuple(float(v) for v in row))
         true_recon = reconstruct(raw)
+        n_samples = len(true_recon)
         n_base = len(baseline_sampler(true_recon))
         fwd_b, fwd_d, both_b, both_d = [], [], [], []
         drifts = []
@@ -837,8 +851,9 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
             db = dream_sampler_deadband(est, path_threshold=path_th,
                                         vel_threshold=vel_th)
             # forward-phase drift at camera loss (true vs estimate endpoint)
-            drifts.append(math.hypot(true_recon[-1][1] - est[-1][1],
-                                     true_recon[-1][2] - est[-1][2]))
+            drift = math.hypot(true_recon[-1][1] - est[-1][1],
+                               true_recon[-1][2] - est[-1][2])
+            drifts.append(drift)
             # single-state (estimate == true) replay on the noisy trajectory
             fwd_b.append(recovery_pe_closed_loop(est, b))
             fwd_d.append(recovery_pe_closed_loop(est, d))
@@ -858,6 +873,16 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
             both_d.append(pd[0])
             r2_ns.append(len(d))
             db_ns.append(len(db))
+            rows.append((name, "baseline", 5000 + run, 9000 + run,
+                         len(b), _complete_waypoint_count(b, n_samples),
+                         round(pb[0], 6), round(pb[1], 6),
+                         1 if pb[2] else 0, 1 if pb[3] else 0,
+                         round(drift, 6)))
+            rows.append((name, "DREAM", 5000 + run, 9000 + run,
+                         len(d), _complete_waypoint_count(d, n_samples),
+                         round(pd[0], 6), round(pd[1], 6),
+                         1 if pd[2] else 0, 1 if pd[3] else 0,
+                         round(drift, 6)))
         mb, cb = _mean_ci(both_b)
         md, cd = _mean_ci(both_d)
         fb, _ = _mean_ci(fwd_b)
@@ -874,6 +899,14 @@ def run_noise_robustness(runs=40, sigma_v=0.01, sigma_w=0.02, path_th=0.98,
               f"(min {min(drifts):.3f} / max {max(drifts):.3f})")
         print(f"  M2 N: R2_s channel {mr2:.1f}+/-{cr2:.1f} | "
               f"velocity-deadband {mdb:.1f}+/-{cdb:.1f}")
+    out = os.path.join(_DATA_DIR, "two_state_runs.csv")
+    with open(out, "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["world", "sampler", "seed", "return_seed", "N_sampler",
+                    "N_stored", "PE_true", "PE_odom", "completed",
+                    "timed_out", "forward_drift"])
+        w.writerows(rows)
+    print(f"\nWrote per-run backing CSV: {out} ({len(rows)} rows)")
     return 0
 
 
