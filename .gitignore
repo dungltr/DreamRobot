@@ -38,13 +38,17 @@ publish/Review/*_orig.png
 review/**/*.tex
 review/**/*.md
 review/**/*.pdf
+review/**/*.docx
 paper/**/*.tex
 paper/**/*.md
 paper/**/*.pdf
+paper/**/*.docx
 traodoi/**/*.tex
 traodoi/**/*.md
 traodoi/**/*.pdf
+traodoi/**/*.docx
 publish/**/*.tex
 publish/**/*.md
 publish/**/*.pdf
+publish/**/*.docx
 
