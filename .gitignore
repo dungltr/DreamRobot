@@ -37,10 +37,14 @@ publish/Review/*_orig.png
 # Manuscript and review working files — kept local only (not pushed)
 review/**/*.tex
 review/**/*.md
+review/**/*.pdf
 paper/**/*.tex
 paper/**/*.md
+paper/**/*.pdf
 traodoi/**/*.tex
 traodoi/**/*.md
+traodoi/**/*.pdf
 publish/**/*.tex
 publish/**/*.md
+publish/**/*.pdf
 
