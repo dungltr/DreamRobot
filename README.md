@@ -61,7 +61,7 @@ cd ~/codewhale_recoveryRobotDREAM
 
 > If the project is located elsewhere, adjust the path. You know you are in the
 > right place when `ls` (list files) shows names such as `run_gazebo_demo.sh`,
-> `test_auto_recovery_sim.py`, `publish/`, `paper/`...
+> `test_auto_recovery_sim.py`, `src/`, `bench_data/`...
 
 ### 1.3 “Activate” the ROS 2 environment (type this at the start of every Terminal session)
 
@@ -377,9 +377,7 @@ If you see:
 - `benchmark_strategy_comparison.py` — compares the three DREAM strategies (geometry / velocity / speed_error) on the recorded odometry.
 - `benchmark_footprint.py` — measures the DREAM per-update CPU time and memory.
 - `bench_data/odom_A/B/C.csv` — recorded Gazebo odometry data.
-- `publish/DREAM-ROS2-IEEE.tex` — the IEEE Access paper draft.
-- `publish/DREAM-ROS2-IEEE.pdf` — the compiled PDF.
-- `paper/benchmark_results.md` — detailed result notes + reproduction commands.
+- The paper draft and reviewer/analysis notes (`publish/*.tex`, `publish/*.pdf`, `review/`, `paper/`, `traodoi/`) are kept locally and are not part of this public benchmark repository.
 
 ---
 

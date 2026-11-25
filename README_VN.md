@@ -46,7 +46,7 @@ cd ~/codewhale_recoveryRobotDREAM
 
 > Nếu dự án nằm ở chỗ khác, thay đường dẫn cho đúng. Bạn biết mình đã đúng chỗ khi
 > lệnh `ls` (liệt kê file) hiện ra các tên như `run_gazebo_demo.sh`,
-> `test_auto_recovery_sim.py`, `publish/`, `paper/`...
+> `test_auto_recovery_sim.py`, `src/`, `bench_data/`...
 
 ### 1.3 “Kích hoạt” môi trường ROS 2 (hãy gõ đầu mỗi phiên Terminal)
 
@@ -305,9 +305,7 @@ Nếu bạn thấy:
 - `run_gazebo_benchmark.py`, `sweep_r2_threshold.py`, `benchmark_baselines_gazebo.py` — sinh các bảng benchmark.
 - `benchmark_footprint.py` — đo thời gian CPU và bộ nhớ mỗi lần cập nhật DREAM.
 - `bench_data/odom_A/B/C.csv` — dữ liệu odometry Gazebo đã ghi.
-- `publish/DREAM-ROS2-IEEE.tex` — bản thảo bài báo IEEE Access.
-- `publish/DREAM-ROS2-IEEE.pdf` — bản PDF đã biên dịch.
-- `paper/benchmark_results.md` — ghi chú chi tiết kết quả + lệnh tái lập.
+- Bản thảo bài báo và các ghi chú phản biện/phân tích (`publish/*.tex`, `publish/*.pdf`, `review/`, `paper/`, `traodoi/`) được giữ ở máy local, không nằm trong repo benchmark công khai này.
 
 ---
 
