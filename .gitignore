@@ -33,3 +33,14 @@ __pycache__/
 
 # Working screenshot backups (originals kept only for local reference)
 publish/Review/*_orig.png
+
+# Manuscript and review working files — kept local only (not pushed)
+review/**/*.tex
+review/**/*.md
+paper/**/*.tex
+paper/**/*.md
+traodoi/**/*.tex
+traodoi/**/*.md
+publish/**/*.tex
+publish/**/*.md
+
