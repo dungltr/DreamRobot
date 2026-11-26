@@ -52,4 +52,5 @@ publish/**/*.md
 publish/**/*.pdf
 publish/**/*.docx
 publish/arxiv/
+publish/DREAM-IJCAS/
 
