@@ -63,7 +63,7 @@ def fig_architecture():
     box(0.1, 3.4, 1.7, 0.9, "Gazebo Sim\n(world A/B/C)")
     box(2.4, 3.4, 1.9, 0.9, "ros\\_gz\\_bridge")
     box(4.9, 3.4, 1.7, 0.9, "odom\\_sanitizer\n(+noise)")
-    box(7.2, 3.4, 2.4, 0.9, "dream\\_sampler\\_node\n(R² event trigger)")
+    box(7.2, 3.4, 2.4, 0.9, "dream\\_sampler\\_node\n(dual-linearity trigger)")
 
     box(7.2, 1.4, 2.4, 0.9, "recovery\\_recorder\\_server\n(YAML writer)")
     box(4.6, 1.4, 1.9, 0.9, "path\\_landmarks.yaml")
@@ -215,11 +215,14 @@ def fig_sweep():
     fig, ax = plt.subplots(figsize=(6.4, 2.4))
     colors = {"A": "#1f77b4", "B": "#2ca02c", "C": "#d62728"}
     for k, name in enumerate(worlds):
-        ax.bar([xi + (k - 1) * w for xi in x], counts[name], width=w,
-               color=colors[name], label=f"World {name}")
+        bars = ax.bar([xi + (k - 1) * w for xi in x], counts[name], width=w,
+                      color=colors[name], label=f"World {name}")
+        for bar, val in zip(bars, counts[name]):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), str(val),
+                    ha="center", va="bottom", fontsize=5.5)
     ax.set_xticks(x)
     ax.set_xticklabels([f"{t:.2f}" for t in thresholds])
-    ax.set_xlabel("$R^2_{\\mathrm{th}}$")
+    ax.set_xlabel(r"$\tau$")
     ax.set_ylabel("Number of DREAM landmarks")
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3, axis="y")
@@ -263,7 +266,7 @@ def fig_tradeoff():
             xs.append(th)
             ys.append(bs.max_lateral(track, recon))
         ax.plot(xs, ys, "o-", ms=4, lw=1.0, color=colors[w], label=f"World {w}")
-    ax.set_xlabel("$R^2_{\\mathrm{th}}$")
+    ax.set_xlabel(r"$\tau$")
     ax.set_ylabel("max lateral deviation [m]")
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)

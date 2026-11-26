@@ -171,7 +171,7 @@ def main():
 def make_pareto_figure():
     """Plot the online threshold sweep (N vs max path error) with the Pareto
     frontier, for the three online variants on the slalom (World B) and the
-    gentle S-curve (World C)."""
+    low-amplitude multi-cycle weave (World C)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -207,7 +207,7 @@ def make_pareto_figure():
                 nondom.append((n, e))
         nondom = sorted(set(nondom))
 
-        ax.plot(dx, dy, "o-", label="DREAM", lw=1.0, ms=4)
+        ax.plot(dx, dy, "o", label="DREAM", ms=4)
         ax.plot(sx, sy, "s-", label="sweep-angle", lw=1.0, ms=4)
         ax.plot(hx, hy, "^-", label="sweep-angle+speed", lw=1.0, ms=4)
         ax.plot(ex, ey, "v-", label="segment-error", lw=1.0, ms=4)
@@ -218,8 +218,7 @@ def make_pareto_figure():
         ax.set_ylabel("max path error (m)")
         ax.set_title(f"World {name}", fontsize=9)
         ax.grid(True, alpha=0.3)
-        if name == "C":
-            ax.legend(fontsize=7, loc="upper right")
+        ax.legend(fontsize=7, loc="upper right")
     fig.tight_layout()
     out = os.path.join("publish", "fig10_pareto.pdf")
     fig.savefig(out, bbox_inches="tight")
