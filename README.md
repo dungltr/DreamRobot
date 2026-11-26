@@ -18,15 +18,17 @@ segments. As a result it **reduces the number of landmarks that must be stored**
 while still returning accurately.
 
 The project now ships **three DREAM sampling strategies**, selectable from the GUI
-or the command line:
+or the command line. Only **geometry** is the strategy described and evaluated in
+the paper (`DREAM-ArXiv.tex`); the other two are experimental code-only
+alternatives and are not part of the paper's results:
 
 - **geometry** (default) — the paper's method: path linearity `(x,y)` + speed
   linearity `s(t)`.
 - **velocity** — coefficient of determination `R²` on linear velocity `v(t)` +
-  angular velocity `ω(t)` (an experimental alternative).
+  angular velocity `ω(t)` (experimental code-only alternative).
 - **speed_error** — a deadband on velocity, normalized by the max speed
-  `|x − x_anchor| / x_max` with a 15% threshold (avoids the `R²` constant-signal
-  degeneracy).
+  `|x − x_anchor| / x_max` with a 15% threshold (experimental code-only
+  alternative; avoids the `R²` constant-signal degeneracy).
 
 The goal of this README: help you **re-run the tests** and **verify for yourself**
 that the numbers in the draft (the paper) match the actual results.
