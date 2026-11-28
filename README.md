@@ -35,6 +35,18 @@ that the numbers in the draft (the paper) match the actual results.
 
 ---
 
+## Manuscript benchmark snapshot and accounting
+
+The manuscript reports the benchmark snapshot `84a2798cd46565b3dd72f9210511a7f5f7f1cf1e`. See the manuscript and its supporting protocol (Table S9) for the exact sampling, payload and noise conventions. Legacy examples in this README are not the manuscript benchmark totals.
+
+- Raw sampler emissions (`N_sampler`) exclude wrapper-added boundaries. DREAM counts the start emission and regression/optional flush emissions. For reconstruction the stored set is the sorted unique union of sampler indices, the start and endpoint; `N_stored` counts this set.
+- On the selected clean recorded paths A/B/C the raw baseline/DREAM counts are 9/2, 26/8, 33/3; the boundary-inclusive baseline/DREAM counts are 11/3, 28/9, 35/4. The corresponding waypoint reductions are 72.7%, 67.9%, 88.6%. These are the reproduced two-rate reference and DREAM path+speed, not the unregularized legacy reference.
+- Both methods use seven fields in the boundary-inclusive comparison. Estimated storage is `56*N_stored+16` bytes, not measured ROS 2 serialized size. The five-field legacy view is a separate accounting convention.
+- Table 4 uses an offline refinement at cap 0.10 m from DREAM plus both endpoints; the refinement count includes boundary and inserted points. The independent Douglas–Peucker comparator uses 0.05 m.
+- Archived noise runs: `bench_data/two_state_runs.csv`. Do not claim that aggregate command output reproduces the archived file byte-for-byte without verification.
+
+---
+
 ## 1. One-time setup
 
 ### 1.1 Prerequisites (quick check)
@@ -340,7 +352,7 @@ then use a VNC client to connect to `machine_address:5900`.
 
 | Content in the paper | Check command | Number that must match |
 |---|---|---|
-| DR / recovery-error table (3 worlds) | `python3 run_gazebo_benchmark.py --compare` | DR `89.5/69.2/90.9%`, PE `0.030 m` |
+| DR / recovery-error table (3 worlds, raw sampler-output) | `python3 run_gazebo_benchmark.py --compare` | DR `77.8/69.2/90.9%`, PE `0.030 m` |
 | R²_th threshold sweep table | `python3 sweep_r2_threshold.py` | PE `0.030 m` (except `inf`) |
 | Theory table (c ≈ 0.0168) | `python3 dream_theory_check.py` | `c ~= 0.0168` |
 | Monte-Carlo table | `run_gazebo_benchmark.py --mc ...` | PE `0.030±0.000 m` |
